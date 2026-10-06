@@ -12,3 +12,6 @@ evidence/p256-webauthn/run-browser-*.json
 evidence/inbox-view-envelope/run-browser-*.json
 evidence/inbox-view-envelope/run-localnet-*.json
 evidence/inbox-view-envelope/localnet.json
+evidence/webauthn-variable-json/*.preimage
+evidence/webauthn-variable-json/*.unproven
+evidence/webauthn-variable-json/*.proven
