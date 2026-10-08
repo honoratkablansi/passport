@@ -549,7 +549,7 @@
       <header class="section-head">
         <div class="section-kind">Symbiosis</div>
         <h2>Shared with the MVP</h2>
-        <p>The demo consumes pinned contract builds while reference implementation and standards work continue. Use the <a href="https://github.com/midnightntwrk/passport/blob/main/docs/plans/STATUS.md" target="_blank" rel="noopener">17 October standards status</a> for merged work, published MIPs, remaining validation and dated release evidence. The <a href="demo.html#picks">original demo picks</a> are retained as planning history.</p>
+        <p>The demo consumes pinned contract builds while reference implementation and standards work continue. Use the <a href="https://github.com/midnightntwrk/passport/blob/main/docs/plans/STATUS.md" target="_blank" rel="noopener">19 October standards status</a> for merged work, published MIPs, remaining validation and dated release evidence. The <a href="demo.html#picks">original demo picks</a> are retained as planning history.</p>
       </header>
 
       <div class="crossovers-grid" id="crossovers"></div>
@@ -616,16 +616,19 @@
           : escapeHtml(cid);
       }).join(' · ') || '—';
       const badge = m.kind === 'prerequisite' ? '<span class="mip-prereq-badge">Prerequisite</span>'
-        : m.kind === 'upstream' ? `<span class="mip-upstream-badge">${(m.upstream || '').includes('/mps/') ? 'Published problem statement' : 'Adopted upstream'}</span>`
+        : m.kind === 'upstream' ? `<span class="mip-upstream-badge">${(m.upstream || '').includes('/mps/') ? 'Published problem statement' : 'Upstream proposal'}</span>`
         : '';
       const secondMeta = m.kind === 'upstream'
         ? `<dt>Upstream</dt><dd><a href="${escapeHtml(m.upstream || '#')}" target="_blank" rel="noopener">${escapeHtml(m.upstream_label || m.id)}</a></dd>`
-        : `<dt>Co-author target</dt><dd>${escapeHtml(m.co_author || '—')}</dd>`;
+        : `<dt>Authors / review</dt><dd>${escapeHtml(m.co_author || '—')}</dd>`;
       const upstreamExtra = (m.kind !== 'upstream' && m.upstream)
         ? `<div><dt>Upstream</dt><dd><a href="${escapeHtml(m.upstream)}" target="_blank" rel="noopener">${escapeHtml(m.upstream_label || m.id)}</a></dd></div>`
         : '';
       const lifecycleExtra = m.lifecycle
         ? `<div><dt>Upstream lifecycle</dt><dd>${escapeHtml(m.lifecycle)}</dd></div>`
+        : '';
+      const discussionExtra = m.discussion
+        ? `<div><dt>Discussion</dt><dd><a href="${escapeHtml(m.discussion)}" target="_blank" rel="noopener">Continue upstream review</a></dd></div>`
         : '';
       const evidenceExtra = (m.evidence && m.evidence.length)
         ? `<div><dt>Evidence</dt><dd>${m.evidence.map(eid => {
@@ -654,6 +657,7 @@
               ${secondMeta}
             </div>
             ${upstreamExtra}
+            ${discussionExtra}
             ${evidenceExtra}
             <div>
               <dt>Component</dt>

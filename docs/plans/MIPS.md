@@ -250,6 +250,16 @@ device-wide revocation remedy is still separate unfinished work.
 [C12](components/C12-chain-side-enforcement.md) ·
 [C23](components/C23-dapp-connection-protocol.md) (issuance half).
 
+### MIP-0025 — Managed Private State and Capsule Runtime (Draft)
+
+[MIP-0025](https://github.com/midnightntwrk/midnight-improvement-proposals/blob/main/mips/mip-0025-capsule-runtime.md)
+is published through #334 with **Draft** status. Track its proposed private-state
+boundary in C16 and the SDK review; it is not a shipped storage or backup service.
+Discussion: https://github.com/midnightntwrk/midnight-improvement-proposals/discussions/355.
+Custom spend logic remains open as
+https://github.com/midnightntwrk/midnight-improvement-proposals/pull/335;
+**MIP-0028 is reserved, not published**.
+
 ### dApp ↔ Wallet Connection Protocol
 
 **Scope.** The connection surface third-party dApps build against —
