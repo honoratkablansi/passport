@@ -13,7 +13,7 @@ No files in the live `contract/` tree are changed.
 The reference is compiled with **Compact 0.35.0** and runtime **0.20.0**.
 Both implementations are checked, costed, proved, and cryptographically verified
 using **ZKIR 3.1.0-rc.1**, at the backend revision bundled with that compiler.
-The Minocrab frontend is pinned to `a57ceb2` (see "Row counts with the
+The Minocrab frontend is pinned to `79b2add` (see "Row counts with the
 Minocrab helpers" below); its older ZKIR output is
 loaded through the current backend's supported legacy reader. The original
 reference artifacts are consumed unchanged. Exact revisions and source hashes
@@ -98,7 +98,7 @@ They use a different reference/backend and are not the current comparison.
 
 ## Row counts with the Minocrab helpers
 
-Minocrab `a57ceb2` (sig-net/minocrab#17) adds `kernel::caller`, a hash
+Minocrab `79b2add` (sig-net/minocrab#17) adds `kernel::caller`, a hash
 preimage builder that hashes constant domain tags off-circuit, `base64url_32`
 in 62 byte splits instead of 286, and a JubJub small-order check by three
 doublings. This revision uses them; arguments, ledger, disclosures and
