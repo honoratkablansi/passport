@@ -98,82 +98,36 @@ They use a different reference/backend and are not the current comparison.
 
 ## Row counts with the Minocrab helpers
 
-Minocrab `a57ceb2` (sig-net/minocrab#17) adds the helpers this port was
-missing, each taken from reading it against a per-op row table of the
-cost model: `kernel::caller`, a hash preimage builder whose all-constant
-preimages (the domain tags) are hashed off-circuit, `base64url_32` in 62
-byte splits instead of 286, and a JubJub small-order check by three
-doublings instead of two scalar multiplications. This revision of the port
-uses them; the arguments, ledger, disclosures and transcripts are unchanged.
+Minocrab `a57ceb2` (sig-net/minocrab#17) adds `kernel::caller`, a hash
+preimage builder that hashes constant domain tags off-circuit, `base64url_32`
+in 62 byte splits instead of 286, and a JubJub small-order check by three
+doublings. This revision uses them; arguments, ledger, disclosures and
+transcripts are unchanged. Static `k` and rows from the same cost model as
+[static costs](evidence/costs.json); proving times are not re-measured.
+Entrypoints whose `k` moves (none rise):
 
-Static `k` and ordinary rows from `midnight-zkir`'s cost model, the same
-instrument as [static costs](evidence/costs.json). Proving and verification
-times below are NOT re-measured; the `evidence/` directory still describes the
-previous revision.
-
-| Circuit | Compact `k` (rows) | Minocrab before `k` (rows) | Minocrab after `k` (rows) |
+| Circuit | Compact `k` | #184 `k` | this PR `k` |
 |---|---|---|---|
-| `activate_initial_device_with_jubjub` | 14 (13,447) | 14 (13,447) | 14 (12,137) |
-| `activate_initial_device_with_k256` | 14 (14,129) | 14 (12,778) | 14 (12,778) |
-| `activate_initial_device_with_p256` | 14 (15,342) | 14 (14,807) | 14 (14,807) |
-| `add_device_with_jubjub` | 15 (26,819) | 15 (26,813) | 15 (21,760) |
-| `add_device_with_k256` | 17 (61,809) | 16 (52,002) | 16 (48,256) |
-| `add_device_with_p256` | 18 (129,887) | 17 (124,132) | 17 (83,371) |
-| `append_inbox_with_jubjub` | 16 (32,838) | 16 (32,832) | 15 (27,787) |
-| `append_inbox_with_k256` | 17 (67,836) | 16 (58,029) | 16 (54,283) |
-| `append_inbox_with_p256` | 18 (135,914) | 17 (130,159) | 17 (89,398) |
-| `deposit_shielded` | 13 (6,506) | 13 (6,506) | 13 (6,506) |
-| `deposit_unshielded` | 9 (331) | 9 (340) | 9 (341) |
-| `issue_grant_with_jubjub` | 16 (59,968) | 16 (59,959) | 16 (54,910) |
-| `issue_grant_with_k256` | 17 (94,960) | 17 (79,423) | 17 (75,677) |
-| `issue_grant_with_p256` | 18 (163,038) | 18 (150,960) | 17 (116,519) |
-| `publish_recovery_session_with_jubjub` | 16 (36,491) | 16 (36,917) | 15 (30,564) |
-| `publish_recovery_session_with_k256` | 17 (72,217) | 16 (62,114) | 16 (57,059) |
-| `publish_recovery_session_with_p256` | 18 (140,296) | 18 (127,922) | 17 (92,174) |
-| `recover_cancel_with_jubjub` | 15 (27,029) | 15 (27,390) | 15 (22,337) |
-| `recover_cancel_with_k256` | 17 (62,383) | 16 (52,577) | 16 (48,831) |
-| `recover_cancel_with_p256` | 18 (130,460) | 17 (124,706) | 17 (83,945) |
-| `recover_finalise` | 12 (2,365) | 12 (2,448) | 11 (1,090) |
-| `recover_submit` | 15 (30,436) | 15 (31,295) | 15 (23,609) |
-| `remove_device_with_jubjub` | 16 (32,776) | 16 (32,787) | 15 (27,742) |
-| `remove_device_with_k256` | 17 (68,314) | 16 (57,718) | 16 (53,972) |
-| `remove_device_with_p256` | 18 (138,266) | 18 (125,404) | 17 (90,963) |
-| `revoke_all_grants_with_jubjub` | 15 (26,692) | 15 (26,686) | 15 (21,633) |
-| `revoke_all_grants_with_k256` | 17 (61,682) | 16 (51,875) | 16 (48,129) |
-| `revoke_all_grants_with_p256` | 18 (129,759) | 17 (124,005) | 17 (83,244) |
-| `revoke_grant_with_jubjub` | 15 (26,922) | 15 (26,916) | 15 (21,863) |
-| `revoke_grant_with_k256` | 17 (61,912) | 16 (52,105) | 16 (48,359) |
-| `revoke_grant_with_p256` | 18 (129,990) | 17 (124,235) | 17 (83,474) |
-| `rotate_enc_key_with_jubjub` | 15 (26,764) | 15 (26,758) | 15 (21,705) |
-| `rotate_enc_key_with_k256` | 17 (61,754) | 16 (51,947) | 16 (48,201) |
-| `rotate_enc_key_with_p256` | 18 (129,832) | 17 (124,077) | 17 (83,316) |
-| `withdraw_shielded_to_contract_with_grant_jubjub` | 17 (75,617) | 17 (69,978) | 16 (64,941) |
-| `withdraw_shielded_to_contract_with_grant_k256` | 17 (110,083) | 17 (85,961) | 17 (82,214) |
-| `withdraw_shielded_to_contract_with_grant_p256` | 18 (180,080) | 18 (163,176) | 17 (128,735) |
-| `withdraw_shielded_to_contract_with_jubjub` | 16 (55,792) | 16 (50,147) | 16 (45,098) |
-| `withdraw_shielded_to_contract_with_k256` | 17 (88,939) | 17 (67,766) | 17 (64,020) |
-| `withdraw_shielded_to_contract_with_p256` | 18 (157,018) | 18 (139,303) | 17 (104,862) |
-| `withdraw_shielded_with_grant_jubjub` | 17 (69,914) | 17 (69,913) | 16 (64,876) |
-| `withdraw_shielded_with_grant_k256` | 17 (104,380) | 17 (85,896) | 17 (82,149) |
-| `withdraw_shielded_with_grant_p256` | 18 (174,377) | 18 (163,111) | 17 (128,670) |
-| `withdraw_shielded_with_jubjub` | 16 (50,089) | 16 (50,082) | 16 (45,033) |
-| `withdraw_shielded_with_k256` | 17 (83,236) | 17 (67,701) | 17 (63,955) |
-| `withdraw_shielded_with_p256` | 18 (151,315) | 18 (139,238) | 17 (104,797) |
-| `withdraw_unshielded_with_grant_jubjub` | 16 (42,406) | 16 (42,457) | 16 (37,408) |
-| `withdraw_unshielded_with_grant_k256` | 17 (76,862) | 16 (64,162) | 16 (60,415) |
-| `withdraw_unshielded_with_grant_p256` | 18 (146,859) | 18 (135,645) | 17 (101,204) |
-| `withdraw_unshielded_with_jubjub` | 15 (28,920) | 15 (28,968) | 15 (23,915) |
-| `withdraw_unshielded_with_k256` | 17 (63,907) | 16 (54,157) | 16 (50,411) |
-| `withdraw_unshielded_with_p256` | 18 (131,986) | 17 (126,284) | 17 (85,523) |
-| **total rows** | 4,010,944 | 3,656,014 | 2,948,966 |
+| `append_inbox_with_jubjub` | 16 | 16 | 15 |
+| `issue_grant_with_p256` | 18 | 18 | 17 |
+| `publish_recovery_session_with_jubjub` | 16 | 16 | 15 |
+| `publish_recovery_session_with_p256` | 18 | 18 | 17 |
+| `recover_finalise` | 12 | 12 | 11 |
+| `remove_device_with_jubjub` | 16 | 16 | 15 |
+| `remove_device_with_p256` | 18 | 18 | 17 |
+| `withdraw_shielded_to_contract_with_grant_jubjub` | 17 | 17 | 16 |
+| `withdraw_shielded_to_contract_with_grant_p256` | 18 | 18 | 17 |
+| `withdraw_shielded_to_contract_with_p256` | 18 | 18 | 17 |
+| `withdraw_shielded_with_grant_jubjub` | 17 | 17 | 16 |
+| `withdraw_shielded_with_grant_p256` | 18 | 18 | 17 |
+| `withdraw_shielded_with_p256` | 18 | 18 | 17 |
+| `withdraw_unshielded_with_grant_p256` | 18 | 18 | 17 |
 
-`k` is lowered on 14 of 52 entrypoints: every P-256 entrypoint that was at 18
-is now 17, `append_inbox_with_jubjub`, `remove_device_with_jubjub` and
-`publish_recovery_session_with_jubjub` go 16→15, the two shielded grant
-withdrawals with JubJub go 17→16, and `recover_finalise` goes 12→11. No
-entrypoint rises. The two k256 shielded withdrawals stay at 17 (63,955 and
-64,020 rows): what remains there is the ECDSA and the protocol's SHA-256
-blocks.
+| Total rows, 52 circuits | rows | vs this PR |
+|---|---|---|
+| Compact | 4,010,944 | −26.5% |
+| #184 | 3,656,014 | −19.3% |
+| this PR | 2,948,966 | |
 
 ## Parity evidence
 
