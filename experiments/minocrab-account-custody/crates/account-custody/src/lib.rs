@@ -1,10 +1,14 @@
 //! Minocrab implementation of the account custody reference.
 pub mod auth;
+pub mod caller;
 pub mod constructor;
 pub mod custody;
 pub mod entrypoints;
 pub mod grant_entrypoints;
 pub mod grants;
+pub mod p256;
+pub mod p256_entrypoints;
+pub mod recovery;
 
 use minocrab::v3::Circuit3;
 use minocrab::{Private, Public};
@@ -28,6 +32,7 @@ pub struct GrantScope {
     pub read_pk_hash: B32<Public>,
     pub window_len: Uint<64, Public>,
     pub window_cap: Uint<128, Public>,
+    pub caller_commit: B32<Public>,
 }
 
 #[derive(Clone, Copy, minocrab_std::v3::LedgerRepr)]
@@ -60,6 +65,18 @@ pub struct Account {
     pub booted: LedgerCell<Bool<Public>>,
     pub grants: LedgerMap<B32<Public>, GrantRecord>,
     pub grant_generation: LedgerCell<Uint<32, Public>>,
+    pub recovery_pk: LedgerCell<minocrab_std::v3::JubjubPoint<Public>>,
+    // MerkleTreeDigest supplies the unbounded Field ABI; no Merkle semantics here.
+    pub recovery_phi: LedgerMap<Uint<8, Public>, minocrab_std::v3::MerkleTreeDigest<Public>>,
+    pub recovery_phi_len: LedgerCell<Uint<8, Public>>,
+    pub recovery_session: LedgerCell<B32<Public>>,
+    pub recovery_wrap: LedgerCell<BytesN<Public, 64>>,
+    pub recovery_version: LedgerCell<Uint<32, Public>>,
+    pub pending_recovery: LedgerCell<Bool<Public>>,
+    pub pending_entry: LedgerCell<B32<Public>>,
+    pub pending_recovery_pk: LedgerCell<minocrab_std::v3::JubjubPoint<Public>>,
+    pub pending_not_before: LedgerCell<Uint<64, Public>>,
+    pub veto_window: LedgerCell<Uint<64, Public>>,
 }
 
 pub const ACCOUNT: Account = Account::new();
@@ -145,5 +162,7 @@ pub fn circuits() -> Vec<CircuitRegistration> {
         .into_iter()
         .chain(entrypoints::DeviceCalls::CIRCUITS)
         .chain(grant_entrypoints::GrantCalls::CIRCUITS)
+        .chain(recovery::RecoveryCalls::CIRCUITS)
+        .chain(p256_entrypoints::P256Calls::CIRCUITS)
         .collect()
 }

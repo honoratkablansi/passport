@@ -65,6 +65,14 @@ pub struct Signature {
 }
 
 pub enum Auth {
+    P256 {
+        pk: crate::p256::Point,
+        policy: crate::p256::Policy,
+        data: BytesN<Private, 37>,
+        sig: crate::p256::Signature,
+        x: B32<Private>,
+        y: B32<Private>,
+    },
     Jubjub {
         pk: JubjubPoint,
         r: JubjubPoint,
@@ -81,6 +89,28 @@ pub enum Auth {
 }
 
 impl Auth {
+    pub fn p256(
+        c: &mut Circuit3,
+        pk: crate::p256::Point,
+        policy: crate::p256::Policy,
+        data: BytesN<Private, 37>,
+        sig: crate::p256::Signature,
+    ) -> Self {
+        let (x, y) = c.into_coordinates(pk.0);
+        let x = c.into_bytes32(x);
+        let x = B32::from_typed(c, x);
+        let y = c.into_bytes32(y);
+        let y = B32::from_typed(c, y);
+        Self::P256 {
+            pk,
+            policy,
+            data,
+            sig,
+            x,
+            y,
+        }
+    }
+
     /// Bind the canonical coordinate bytes once to the point argument. Reuse
     /// them for the weak-key guard, commitments, and signed challenge.
     pub fn k256(c: &mut Circuit3, pk: Secp256k1Point, sig: Signature, envelope: Uint<8>) -> Self {
@@ -102,6 +132,7 @@ impl Auth {
         match self {
             Self::Jubjub { .. } => "",
             Self::K256 { .. } => "k1:",
+            Self::P256 { .. } => "r1:",
         }
     }
     pub fn key(&self, c: &mut Circuit3) -> Preimage {
@@ -110,11 +141,14 @@ impl Auth {
                 let (x, y) = c.into_coordinates(pk.point());
                 Preimage::default().field(x).field(y)
             }
-            Self::K256 { x, y, .. } => Preimage::default().bytes(*x).bytes(*y),
+            Self::K256 { x, y, .. } | Self::P256 { x, y, .. } => {
+                Preimage::default().bytes(*x).bytes(*y)
+            }
         }
     }
     pub fn live_key(&self, c: &mut Circuit3) {
         match self {
+            Self::P256 { .. } => {} // coordinate extraction rejects identity; cofactor is one
             Self::Jubjub { pk, .. } => {
                 let eight = c.constant(8u64).private();
                 let scalar = c.jubjub_scalar_from_native(eight);
@@ -140,12 +174,14 @@ impl Auth {
         let version = match self {
             Self::Jubjub { .. } => "v1",
             Self::K256 { .. } => "k1:v2",
+            Self::P256 { .. } => "r1:v2",
         };
         let p = Preimage::tag(c, &format!("midnight:account:device:{version}"));
         let me = kernel::self_address(c).bytes().private();
         let p = p.bytes(me).append(self.key(c));
         let p = match self {
             Self::K256 { envelope, .. } => p.uint(envelope.field(), 1),
+            Self::P256 { policy, .. } => p.append(policy.preimage()),
             _ => p,
         };
         let epoch = ACCOUNT.device_epoch.read(c).stale(c).field().private();
@@ -155,11 +191,13 @@ impl Auth {
         let version = match self {
             Self::Jubjub { .. } => "v1",
             Self::K256 { .. } => "k1:v2",
+            Self::P256 { .. } => "r1:v2",
         };
         let p = Preimage::tag(c, &format!("midnight:account:boot:{version}"));
         let p = p.bytes(salt).append(self.key(c));
         let p = match self {
             Self::K256 { envelope, .. } => p.uint(envelope.field(), 1),
+            Self::P256 { policy, .. } => p.append(policy.preimage()),
             _ => p,
         };
         p.hash(c)
@@ -197,6 +235,13 @@ impl Auth {
     }
     pub fn verify(&self, c: &mut Circuit3, challenge: B32<Private>) {
         match self {
+            Self::P256 {
+                pk,
+                policy,
+                data,
+                sig,
+                ..
+            } => crate::p256::verify(c, challenge, policy, data, *sig, *pk),
             Self::Jubjub { pk, r, s, .. } => {
                 // Compact's Bytes<32> -> Field is checked, NOT reduction modulo p.
                 let challenge = c.reconstitute_field(challenge.hi, challenge.lo, 248);
@@ -250,7 +295,7 @@ impl Auth {
                 let valid = secp256k1_ecdsa_verify(c, &digest, &signature, pk.point());
                 c.assert(valid);
             }
-            Self::Jubjub { .. } => self.verify(c, challenge),
+            _ => self.verify(c, challenge),
         }
     }
     pub fn authorise(&self, c: &mut Circuit3, counter: Uint<64>, challenge: B32<Private>) {

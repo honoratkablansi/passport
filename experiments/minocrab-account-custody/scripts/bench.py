@@ -36,6 +36,12 @@ def main():
     costs = json.loads(subprocess.check_output([BIN, "costs"], text=True))
     (evidence / "costs.json").write_text(json.dumps(costs, indent=2) + "\n")
     assert input_hashes() == gate["input_sha256"], "circuit or preimage changed; rerun compare --mutations"
+    # Outputs serialize as type strings, unlike the named input objects.
+    # Compare the complete type arrays independently of the Rust ABI gate.
+    for native in (ROOT / "artifacts/minocrab").glob("*.zkir"):
+        candidate = json.loads(native.read_text())
+        reference = json.loads((ROOT / "reference/contracts/managed/account/zkir" / native.name).read_text())
+        assert candidate["outputs"] == reference["outputs"], f"output ABI mismatch: {native.name}"
     priority = "withdraw_unshielded_with_grant_k256"
     names = sorted({row["circuit"] for row in costs}, key=lambda name: (name != priority, name))
     provenance = {

@@ -88,9 +88,9 @@ use midnight_transient_crypto::hash::transient_commit;
 use midnight_transient_crypto::merkle_tree::MerkleTree as VmMerkleTree;
 use midnight_transient_crypto::proofs::{KeyLocation, ProofPreimage};
 use midnight_transient_crypto::repr::FieldRepr;
-use minocrab_zkir::v3::IrSource;
+use reference_zkir::IrSource;
 
-use minocrab_sim::v3::{Mode, Run3, Sim3Error, simulate_with};
+use crate::simulator::{Mode, Run3, Sim3Error, simulate_with};
 
 /// The Impact op type a transcript is made of.
 pub type VmOp = Op<ResultModeVerify, InMemoryDB>;
@@ -353,7 +353,7 @@ fn finish(
 fn comm_commitment(preimage: &ProofPreimage, run: &Run3, rand: Fr) -> Result<Fr, ExecError> {
     let mut list: Vec<Fr> = preimage.inputs.clone();
     for value in run.outputs.iter() {
-        for ir_val in midnight_zkir_v3::ir_instructions::encode::encode_offcircuit(value) {
+        for ir_val in reference_zkir::ir_instructions::encode::encode_offcircuit(value) {
             list.push(
                 ir_val
                     .try_into()

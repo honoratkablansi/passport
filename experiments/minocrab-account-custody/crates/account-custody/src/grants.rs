@@ -22,6 +22,7 @@ pub struct ScopeInput {
     pub read_pk_hash: B32<Private>,
     pub window_len: Uint<64>,
     pub window_cap: Uint<128>,
+    pub caller: Maybe<ContractAddress<Private>, Private>,
     pub salt: B32<Private>,
 }
 
@@ -63,7 +64,13 @@ pub fn spent(c: &mut Circuit3, salt: B32<Private>, value: F) -> B32<Private> {
 }
 impl ScopeInput {
     pub fn digest(&self, c: &mut Circuit3) -> B32<Private> {
-        Preimage::tag(c, "midnight:account:grant:scope:v1")
+        let caller = caller_commit(
+            c,
+            self.salt,
+            self.caller.is_some.field(),
+            self.caller.value.bytes(),
+        );
+        Preimage::tag(c, "midnight:account:grant:scope:v2")
             .bytes(self.salt)
             .uint(self.unshielded.field(), 1)
             .uint(self.shielded.field(), 1)
@@ -80,6 +87,7 @@ impl ScopeInput {
             .bytes(self.read_pk_hash)
             .uint(self.window_len.field(), 8)
             .uint(self.window_cap.field(), 16)
+            .bytes(caller)
             .hash(c)
     }
 }
@@ -104,6 +112,9 @@ pub fn issue(c: &mut Circuit3, id: B32<Private>, s: ScopeInput) {
     let spend = either(c, s.unshielded.field(), shielded);
     let nonempty = either(c, spend, s.read.field());
     c.assert(nonempty);
+    let unrestricted = c.not(s.caller.is_some.field());
+    let valid_caller_scope = either(c, spend, unrestricted);
+    c.assert(valid_caller_scope);
     implies(c, shielded, s.read.field());
     let cap_valid = le(c, s.per_call_cap.field(), s.cap.field(), 128);
     c.assert(cap_valid);
@@ -149,6 +160,8 @@ pub fn issue(c: &mut Circuit3, id: B32<Private>, s: ScopeInput) {
         .bytes(s.rp_id_hash)
         .hash(c)
         .disclose_as::<Mutation>(c);
+    let caller_commit = caller_commit(c, s.salt, s.caller.is_some.field(), s.caller.value.bytes())
+        .disclose_as::<Mutation>(c);
     let zero = c.constant(0u64);
     let one = c.constant(1u64);
     let record = GrantRecord {
@@ -173,6 +186,7 @@ pub fn issue(c: &mut Circuit3, id: B32<Private>, s: ScopeInput) {
             read_pk_hash: s.read_pk_hash.disclose_as::<Mutation>(c),
             window_len: Uint::from_field_unchecked(zero),
             window_cap: Uint::from_field_unchecked(zero),
+            caller_commit,
         },
     };
     ACCOUNT.grants.insert(c, &id, &record);
@@ -258,6 +272,23 @@ pub fn check_scope(
     kind: u64,
 ) -> F {
     c.assert(admitted.field());
+    let hi = c.test_eq(g.scope.caller_commit.hi, 0u64);
+    let lo = c.test_eq(g.scope.caller_commit.lo, 0u64);
+    let unrestricted = c.mul(hi, lo);
+    let restricted = c.not(unrestricted);
+    c.when(restricted, |c| {
+        let caller = crate::caller::caller(c);
+        c.assert(caller[0]);
+        c.assert(caller[1]);
+        let address = B32 {
+            hi: caller[2].private(),
+            lo: caller[3].private(),
+        };
+        let present = c.constant(1u64).private();
+        let commitment = caller_commit(c, opening.salt, present, address);
+        let valid = bytes_eq(c, commitment, g.scope.caller_commit.private());
+        c.assert(valid);
+    });
     let expected = object(
         c,
         opening.salt,
@@ -321,4 +352,25 @@ pub fn settle(
     g.spent_commit = spent(c, salt, new_spent).disclose_as::<Mutation>(c);
     ACCOUNT.grants.insert(c, &id, &g);
     increment(c, &ACCOUNT.round);
+}
+
+/// Canonical optional immediate-contract-caller commitment, shared with issue.
+pub fn caller_commit(
+    c: &mut Circuit3,
+    salt: B32<Private>,
+    present: F,
+    address: B32<Private>,
+) -> B32<Private> {
+    let zero = B32::pad(c, "").private();
+    let empty = bytes_eq(c, address, zero);
+    let canonical = either(c, present, empty);
+    c.assert(canonical);
+    let commitment = Preimage::tag(c, "midnight:account:grant:caller:v1")
+        .bytes(salt)
+        .bytes(address)
+        .hash(c);
+    let reserved = bytes_eq(c, commitment, zero);
+    let nonzero = c.not(reserved);
+    implies(c, present, nonzero);
+    B32::cond_select(c, present, &commitment, &zero)
 }

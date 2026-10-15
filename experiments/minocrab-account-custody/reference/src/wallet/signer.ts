@@ -1,8 +1,8 @@
 // Device signers — one per authorisation arm of the contract (see the
 // contract header: arm `jubjub` is the normative MIP-0013 scheme, arm
-// `k256` the interim ECDSA stand-in for the planned secp256r1 passkey arm).
+// `k256` ECDSA, and `p256` profiled WebAuthn/ES256).
 //
-// Common to both arms: a device holds an independent keypair (sk, pk =
+// Common to all arms: a device holds an independent keypair (sk, pk =
 // sk·G) on its arm's curve; keys are never derived from one another or
 // from a seed (AUTH-7). The challenge preimages are reproduced through the
 // contract's own exported pure circuits, so each signer inherits the
@@ -31,6 +31,9 @@
 
 import { createHash, randomBytes } from 'node:crypto';
 import { secp256k1 } from '@noble/curves/secp256k1.js';
+import type { P256Device, P256Grantee, P256Authorisation, P256GrantAuthorisation } from './signer-p256.js';
+export { P256Device, P256Grantee, p256Challenges, p256GrantChallenges } from './signer-p256.js';
+export type { P256Authorisation, P256GrantAuthorisation } from './signer-p256.js';
 
 import {
   pureCircuits,
@@ -40,7 +43,7 @@ import {
 } from './contract.js';
 
 /** The authorisation arms the contract exports circuits for. */
-export type Arm = 'jubjub' | 'k256';
+export type Arm = 'jubjub' | 'k256' | 'p256';
 
 export interface CallContext {
   /** The account's contract address, raw bytes (binds the account, AUTH-3). */
@@ -213,6 +216,29 @@ export const jubjubChallenges = {
     (ctx: CallContext, pk: JubjubPoint): ChallengeBuilder =>
     (sigR, grind) =>
       pureCircuits.challenge_revoke_all_grants_with_jubjub(addr(ctx), sigR, pk, ctx.authNonce, grind),
+
+  // Recovery (recovery MIP section 5, section 6): the session publish binds
+  // the whole artefact set; the cancel binds only the standard set.
+  publishRecoverySession:
+    (
+      ctx: CallContext,
+      pk: JubjubPoint,
+      newRecoveryPk: JubjubPoint,
+      sessionNonce: Uint8Array,
+      phi: readonly [bigint, bigint, bigint, bigint],
+      phiLen: bigint,
+      wrap: Uint8Array,
+    ): ChallengeBuilder =>
+    (sigR, grind) =>
+      pureCircuits.challenge_publish_recovery_session_with_jubjub(
+        addr(ctx), sigR, pk, newRecoveryPk, sessionNonce,
+        phi[0], phi[1], phi[2], phi[3], phiLen, wrap, ctx.authNonce, grind,
+      ),
+
+  recoverCancel:
+    (ctx: CallContext, pk: JubjubPoint): ChallengeBuilder =>
+    (sigR, grind) =>
+      pureCircuits.challenge_recover_cancel_with_jubjub(addr(ctx), sigR, pk, ctx.authNonce, grind),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -368,18 +394,41 @@ export const k256Challenges = {
 
   revokeAllGrants: (ctx: CallContext, pk: Secp256k1Point): Uint8Array =>
     pureCircuits.challenge_revoke_all_grants_with_k256(addr(ctx), pk, ctx.authNonce),
+
+  // Recovery (recovery MIP section 5, section 6), family
+  // `midnight:account:auth:k1:v1:<op>`; see the jubjub builders.
+  publishRecoverySession: (
+    ctx: CallContext,
+    pk: Secp256k1Point,
+    newRecoveryPk: JubjubPoint,
+    sessionNonce: Uint8Array,
+    phi: readonly [bigint, bigint, bigint, bigint],
+    phiLen: bigint,
+    wrap: Uint8Array,
+  ): Uint8Array =>
+    pureCircuits.challenge_publish_recovery_session_with_k256(
+      addr(ctx), pk, newRecoveryPk, sessionNonce,
+      phi[0], phi[1], phi[2], phi[3], phiLen, wrap, ctx.authNonce,
+    ),
+
+  recoverCancel: (ctx: CallContext, pk: Secp256k1Point): Uint8Array =>
+    pureCircuits.challenge_recover_cancel_with_k256(addr(ctx), pk, ctx.authNonce),
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Arm-generic surface
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type AnyDevice = JubjubDevice | K256Device;
-export type Authorisation = JubjubAuthorisation | K256Authorisation;
+export type AnyDevice = JubjubDevice | K256Device | P256Device;
+export type Authorisation = JubjubAuthorisation | K256Authorisation | P256Authorisation;
 
 /** The trailing circuit arguments an Authorisation expands to, in the
  *  order the arm's gated circuits declare them. */
 export function authArgs(a: Authorisation): unknown[] {
+  if (a.arm === 'p256') {
+    const { arm, ...auth } = a;
+    return [auth];
+  }
   return a.arm === 'jubjub'
     ? [a.pk, a.use_counter, a.sig_r, a.sig_s, a.grind_nonce]
     : [a.pk, a.use_counter, a.sig, a.envelope];
@@ -468,6 +517,8 @@ export interface PlainScope {
   windowLen: bigint;
   /** Reserved; MUST be 0. */
   windowCap: bigint;
+  /** Optional immediate ContractAddress pin; absent means any caller. */
+  caller?: Uint8Array;
 }
 
 const ZERO32 = new Uint8Array(32);
@@ -476,17 +527,19 @@ function isZero(bytes: Uint8Array): boolean {
   return bytes.every((b) => b === 0);
 }
 
-/** The sixteen scope arguments in the circuit's declaration order, as
+/** The scope arguments in the circuit's declaration order, as
  *  `issue_grant_with_<arm>` and `derive_grant_scope_digest` take them. */
 export function scopeArgs(s: PlainScope): [
   boolean, boolean, boolean, boolean,
   Uint8Array, bigint, Uint8Array, bigint, bigint, bigint, bigint,
   Uint8Array, Uint8Array, bigint, bigint,
+  { is_some: boolean; value: { bytes: Uint8Array } },
 ] {
   return [
     s.opWithdrawUnshielded, s.opWithdrawShielded, s.opWithdrawShieldedToContract, s.read,
     s.color, s.recipientKind, s.recipient, s.maxCoinValue, s.perCallCap, s.cap, s.expiresAt,
     s.rpIdHash, s.readPkHash, s.windowLen, s.windowCap,
+    { is_some: s.caller !== undefined, value: { bytes: s.caller ?? ZERO32 } },
   ];
 }
 
@@ -504,6 +557,10 @@ export function assertIssueRules(s: PlainScope): void {
   const spend = isSpendScope(s);
   const shielded = s.opWithdrawShielded || s.opWithdrawShieldedToContract;
   if (!spend && !s.read) throw new Error('issue rule 1: empty scope (no operation flag and no read)');
+  if (s.caller !== undefined) {
+    if (s.caller.length !== 32) throw new Error('caller must be a 32-byte contract address');
+    if (!spend) throw new Error('read-only grant cannot restrict caller');
+  }
   if (shielded && !s.read) throw new Error('issue rule 2: a shielded spend flag requires read');
   if (s.perCallCap > s.cap) throw new Error('issue rule 3: per_call_cap above cap');
   if (spend && (s.cap === 0n || s.maxCoinValue < s.perCallCap)) {
@@ -560,6 +617,7 @@ export function spendScope(opts: {
   expiresAt?: bigint;
   readPkHash?: Uint8Array;
   rpIdHash?: Uint8Array;
+  caller?: Uint8Array;
 }): PlainScope {
   const shielded = !!(opts.withdrawShielded || opts.withdrawShieldedToContract);
   const s: PlainScope = {
@@ -575,6 +633,7 @@ export function spendScope(opts: {
     cap: opts.cap,
     expiresAt: opts.expiresAt ?? 0n,
     rpIdHash: opts.rpIdHash ?? ZERO32,
+    caller: opts.caller,
     readPkHash: opts.readPkHash ?? ZERO32,
     windowLen: 0n, windowCap: 0n,
   };
@@ -582,7 +641,7 @@ export function spendScope(opts: {
   return s;
 }
 
-/** `scope_digest` (section 4.5): the seventeen-element salted digest the
+/** `scope_digest` v2 (section 4.5): the eighteen-element salted digest the
  *  issuing device signs over, through the contract's pure circuit. */
 export function scopeDigest(scopeSalt: Uint8Array, s: PlainScope): Uint8Array {
   return pureCircuits.derive_grant_scope_digest(scopeSalt, ...scopeArgs(s));
@@ -601,7 +660,7 @@ export interface GrantOpening {
   originHash: Uint8Array;
   /** The grantee slot under that origin (Uint<8>). */
   slot: bigint;
-  /** Opens `object_commit`, `rp_commit`, and `spent_commit`. */
+  /** Opens `object_commit`, `rp_commit`, `caller_commit`, and `spent_commit`. */
   scopeSalt: Uint8Array;
   recipientKind: bigint;
   pinnedRecipient: Uint8Array;
@@ -652,7 +711,7 @@ export interface JubjubGrantAuthorisation {
   grind_nonce: bigint;
 }
 
-export type GrantAuthorisation = K256GrantAuthorisation | JubjubGrantAuthorisation;
+export type GrantAuthorisation = K256GrantAuthorisation | JubjubGrantAuthorisation | P256GrantAuthorisation;
 
 /**
  * A grantee key on the k256 arm. Unlike a device it has no use counter
@@ -755,7 +814,7 @@ export class JubjubGrantee {
   }
 }
 
-export type AnyGrantee = K256Grantee | JubjubGrantee;
+export type AnyGrantee = K256Grantee | JubjubGrantee | P256Grantee;
 
 // Grant-twin challenges (section 6.3). Preimage, k256:
 // [DST_TWIN, self, pk_x, pk_y, grant_id, issued_at, ...args, [coin], nonce];
@@ -831,6 +890,10 @@ export const jubjubGrantChallenges = {
  */
 export function grantAuthArgs(o: GrantOpening, a: GrantAuthorisation): unknown[] {
   const openings = [o.scopeSalt, o.recipientKind, o.pinnedRecipient, o.maxCoinValue, o.spentPrev];
+  if (a.arm === 'p256') {
+    const { arm, ...auth } = a;
+    return [o.originHash, o.slot, ...openings, auth];
+  }
   return a.arm === 'k256'
     ? [a.pk, a.envelope, o.originHash, o.slot, ...openings, a.sig]
     : [a.pk, o.originHash, o.slot, ...openings, a.sig_r, a.sig_s, a.grind_nonce];

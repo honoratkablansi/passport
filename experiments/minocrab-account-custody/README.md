@@ -1,106 +1,133 @@
 # Account custody in Minocrab
 
-An independent Rust/Minocrab implementation of the **30-entry-point,
-`spec_version = 2` account custody reference** at passport commit
-[`55aa2876`](https://github.com/midnightntwrk/passport/tree/55aa2876edadc5aa873b6693d563d04342e99a88/contract).
-It covers the constructor, JubJub and k256 device authorisation, cross-arm
-enrolment, shielded custody, unshielded balance mirrors, encrypted inbox,
-and scoped grants. The implementation does not translate Compact instructions;
-the pinned Compact implementation is the independent comparison oracle.
+An independent Rust/Minocrab implementation of all **52 state-changing
+entrypoints** of the current **`spec_version = 3` account custody reference** at
+passport commit [`0d7bb0bc`](https://github.com/midnightntwrk/passport/tree/0d7bb0bc834f2d45d9fe2d84c4d022a30d648423/contract).
+It reproduces the 25-field ledger and constructor, JubJub/k256/P256 device
+and grant authorisation, caller-bound grants, recovery publication/submission/
+veto/finalisation, shielded and unshielded custody, and encrypted inbox.
+The Rust contract is written independently; it does not translate Compact IR.
+The unchanged Compact contract and its signers provide the comparison oracle.
+No files in the live `contract/` tree are changed.
 
-**Scope:** this is the historical reference used when the experiment started.
-The snapshot in `reference/` makes that comparison reproducible on current
-main, whose reference has since gained caller-bound grants and recovery.
-Those additions and the separate p256 implementation are outside this port.
-No files in the live `contract/` tree are changed by this experiment.
+The reference is compiled with **Compact 0.35.0** and runtime **0.20.0**.
+Both implementations are checked, costed, proved, and cryptographically verified
+using **ZKIR 3.1.0-rc.1**, at the backend revision bundled with that compiler.
+The Minocrab frontend remains pinned to `537721a`; its older ZKIR output is
+loaded through the current backend's supported legacy reader. The original
+reference artifacts are consumed unchanged. Exact revisions and source hashes
+are in [reference provenance](reference/provenance.json) and
+[run provenance](evidence/provenance.json); all transitive versions are locked.
 
-This is an offline circuit experiment, not a deployment package. Constructor
-state is reproduced independently, but verification-key installation, wallet
-integration, funded transactions, and on-node conformance remain future work.
+This remains an offline circuit experiment. Verification-key installation,
+wallet transaction construction, funded transactions, and on-node conformance
+are not implemented by this experiment.
 
-## What the optimisations demonstrate
+## Current comparison
 
-The initial Rust port retained the reference's `k` on all 30 entry points.
-Its [baseline measurements](evidence/baseline/report.md) are retained separately.
-The optimised implementation applies three local changes:
+Minocrab lowers **`k` by one on 17 of 52 entrypoints**, with **no increases**:
+10 k256 operations go from 17 to 16, and 7 P256 operations go from 18 to 17.
+The other 35 retain their reference `k`. Ordinary rows decrease on 42 circuits,
+increase on 8, and tie on 2. In particular, recovery submission/finalisation
+use slightly more rows in Rust while retaining their reference `k`. The
+[paired report](evidence/report.md) lists every circuit's `k`, rows, proof bytes,
+median proving time, and median verification time. The
+[raw samples](evidence/benchmark.json) also retain key-generation timings;
+[static costs](evidence/costs.json) include separately labelled ZKIR JSON sizes.
 
-1. **Reuse k256 coordinate bytes.** Derive the canonical byte encodings once
-   from the point argument and reuse them in weak-key rejection, commitments,
-   and challenges. The bytes are never supplied as independent witnesses.
-2. **Specialise grant signature verification.** Spend grants already require
-   envelope zero. Retain that assertion and omit the unreachable connector
-   digest. Device authorisation continues to support both envelopes.
-3. **Reuse shielded output commitments.** Hash the sent coin once and reuse
-   its commitment on self-transfers. Specialise the recipient arm at circuit
-   construction, retaining nullifier claims, self-receive claims, change
-   outputs, checked subtraction, and the zero payload for absent change.
+Two examples from the paired Apple M4 Max run (Compact / Minocrab):
 
-The k256 unshielded grant withdrawal drops from **`k=17` to `k=16`**.
-On the recorded Apple M4 Max run, its median proving time falls from **4.40 s
-to 2.43 s (45%)**. Proof size stays at **6,336 bytes**, and median cryptographic
-verification is **3.48 / 3.71 ms** (Compact / Minocrab); no verification-speed
-gain is claimed. A generated `max_k = 16` test prevents regression. The other
-savings and real proving/verification samples are in the [paired report](evidence/report.md),
-[raw measurements](evidence/benchmark.json), and [cost table](evidence/costs.json).
+| Operation | `k` | Median proving | Median verification | Proof bytes |
+|---|---|---|---|---|
+| k256 grant unshielded withdrawal | 17 / 16 | 4.78 / 2.77 s | 3.82 / 4.21 ms | 6,336 / 6,336 |
+| P256 add device | 18 / 17 | 9.84 / 5.37 s | 3.36 / 3.42 ms | 6,336 / 6,336 |
 
-These changes are not all exclusive to Minocrab. Coordinate reuse and grant
-envelope specialisation can also be expressed in Compact. Improving and
-validating the live Compact reference is a separate work stream. This comparison measures an
-optimised native Rust implementation against the pinned, unchanged reference.
+These are approximately 42% and 45% shorter proving times. No verification-speed
+improvement is claimed for these examples. Proof sizes match across all 52 pairs.
 
-`k` is not determined by the displayed ordinary-row count alone: chip/table
-configuration and reserved rows matter, and ordinary-row cost can itself change
-when configured at another `k`. A smaller `k` primarily targets proving time and
-memory; it does not guarantee a smaller proof or faster verification.
+The native implementation retains these optimisations:
+
+1. **Reuse coordinate bytes.** Derive canonical coordinate encodings once from
+   the k256/P256 point argument and reuse them in commitments and challenges
+   (and k256 weak-key checks). They are not independent witnesses.
+2. **Specialise grant signatures.** Spend grants require envelope zero. Keep
+   that assertion and omit the unreachable k256 connector digest; device
+   authorisation still supports both envelopes.
+3. **Reuse shielded commitments.** Compute the sent coin commitment once and
+   reuse it for self-transfers. Specialise recipient types at construction,
+   retaining nullifier/self-receive claims, checked subtraction, change outputs,
+   and the canonical absent-change payload.
+
+The new recovery and caller checks preserve the reference conditions and
+bindings. P256 verifies the reference's `wa-json134` WebAuthn profile in-circuit,
+including canonical challenge encoding, RP/origin binding, authenticator flags,
+and ECDSA. The pinned Minocrab convenience API lacks P256 argument wrappers and
+`kernel.caller`; the experiment supplies typed wrappers and the public ledger
+caller query. The caller is never accepted as a private witness.
+
+These optimisations are not exclusive to Minocrab. Coordinate reuse and grant
+envelope specialisation can also be expressed in Compact. Improving the live
+Compact reference remains a separate work stream. This comparison measures an
+optimised Rust contract against an unchanged Compact reference, both on the
+same proving backend; it does not isolate the frontend's effect alone.
+
+`k` depends on chip/table configuration and reserved rows as well as ordinary
+rows. A smaller `k` targets proving cost and memory; it does not guarantee a
+smaller proof or faster verification. The historical v2 results are retained in
+[evidence/baseline/](evidence/baseline/) and
+[evidence/historical-v2-optimised/](evidence/historical-v2-optimised/).
+They use a different reference/backend and are not the current comparison.
 
 ## Parity evidence
 
-[Execution evidence](evidence/equivalence.json) records **150 executions** of
-the reference's generated TypeScript, replayed separately through both circuits
-and Midnight's Impact VM. Post-state, outputs, and kernel effects agree, and
-both proof preimages pass Midnight's own `Zkir::check`. Input/output ABI and
-communications-commitment mode match across the complete circuit registry.
-The native constructor state is checked against reference initial states.
+[Execution evidence](evidence/equivalence.json) records **504 executions** from
+the reference's generated TypeScript, replayed independently through both
+circuits and Midnight's Impact VM. Post-state, return values, and kernel effects
+agree; both proof preimages pass the current backend's `Zkir::check`.
+Input/output ABI and communications-commitment mode match for all 52 entrypoints.
+The independently constructed initial state matches every reference constructor
+fixture.
 
-Coverage includes both owner arms × both grantee arms, cross-arm enrolment,
-connector envelopes, both ECDSA S forms, shielded exact spends and change,
-external contract recipients, and self-transfers. The harness also passes
-**3,120 single-slot input/witness mutations** and **304 context checks** for
-replay, wrong-account authorisation, and grant expiry boundaries. There are
-33 Rust tests, including disclosure checks, the `k` budget, and executor
-regressions. This is differential evidence, not a formal equivalence proof or
-the full on-node conformance suite.
+Coverage includes all three owner and grantee arms; both k256 envelopes;
+low/high ECDSA S forms; all accepted P256 authenticator flags (5, 13, 29);
+external/self shielded sends with exact amounts and change; unrestricted and
+caller-bound grants; recovery vector lengths 1, 4, and 2; cancellation and
+successful delayed finalisation. It also exercises **11,886 single-slot
+input/witness mutations** and **1,644 context checks** for replay, wrong-account
+authorisation, caller identity/type/absence, expiry, and recovery timing bounds.
+There are **57 passing Rust tests**, including disclosure declarations, the
+native `k` budget, byte-encoding/P256 backend compatibility, and executor fixes.
 
-The circuits can reorder ledger reads. Each proves its own transcript of the
-same operation against the same initial state and arguments; public-input
-vectors and proving keys are not claimed to be interchangeable. The historical
-reference's documented revocation limitations are preserved, not silently fixed.
+This is differential evidence, not a formal equivalence proof or the full
+on-node conformance suite. Each circuit proves its own transcript of the same
+operation against the same initial state and arguments. Ledger reads can be
+ordered differently; public-input vectors and verification keys need not match.
+The reference's behavior is preserved rather than silently corrected.
 
 ## Measurement limits
 
-**Complete transaction sizes are not measured.** `transaction_bytes` is `null`.
-Proof bytes and ZKIR JSON bytes are separately labelled and must not be read as
-transaction size. A funded transaction also carries transcripts, shielded
-proofs/offers, unshielded offers, fee funding, and signatures. Verification
-samples measure cryptographic proof verification, excluding ledger replay,
-transaction validation, and network latency.
+**Complete transaction sizes are not measured:** `transaction_bytes` is `null`.
+Proof bytes and ZKIR JSON bytes must not be interpreted as transaction size.
+Funded transactions also carry transcripts, offers/shielded proofs, fees, and
+signatures. Verification samples measure cryptographic proof verification,
+excluding ledger replay, full transaction validation, and network latency.
 
-Each paired measurement uses a release build in a fresh subprocess, alternating
-which implementation runs first. Parameter loading precedes the key-generation
-timer. Key generation is timed separately; one proof warms the process and
-three proofs are timed, retaining every proving and verification sample.
-The report uses medians. Avoid concurrent CPU-heavy work; three samples do not
-support conclusions about small timing differences.
+Each pair uses a release build in separate subprocesses, alternating which
+implementation runs first. Parameter loading precedes the key-generation timer.
+Key generation is timed separately, then one proof warms the process and three
+proofs are timed. Every verification sample is retained; the report uses medians.
+Avoid concurrent CPU-heavy work. Three samples cannot establish small timing
+improvements reliably.
 
-The last successful fixture per circuit supplies the benchmark preimage:
-shielded withdrawals use the exact-spend branch and an external recipient.
-Self-transfers and change are covered by parity checks but are not separately
-timed. Baseline and optimised timings come from separate runs; the new paired
-reference/Minocrab measurements are the primary timing comparison.
+The last successful fixture per circuit supplies its benchmark preimage.
+Grant withdrawals use a restricted contract caller; shielded withdrawals use
+an external recipient and exact spend. Change and self-transfer branches are
+checked for parity but not separately timed. Timings from previous reference
+versions are historical only.
 
 ## Reproduce
 
-Prerequisites: Rust, Node.js/npm, Python 3, and Compact compiler `0.33.0-rc.2`.
+Prerequisites: Rust, Node.js/npm, Python 3, and Compact compiler `0.35.0`.
 From this directory:
 
 ```sh
@@ -108,8 +135,8 @@ npm ci
 npm run compile:reference
 npm run fixtures
 cargo fmt --all -- --check
-cargo clippy -p project-account-custody -p project-custody-measure --all-targets -- -D warnings
-cargo test -p project-account-custody -p project-custody-measure
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
 cargo build --release -p project-custody-measure
 target/release/project-custody-measure compare --mutations
 python3 scripts/bench.py
@@ -117,38 +144,33 @@ python3 scripts/bench.py
 python3 scripts/bench.py --resume
 ```
 
-`compile:reference` verifies source and generated ZKIR hashes against
-[reference provenance](reference/provenance.json). The benchmark refuses stale
-binaries or preimages and records their hashes. Dependencies are pinned in the
-Rust/npm lockfiles; [run provenance](evidence/provenance.json) identifies the
-validated sources and toolchain. Initial builds need network access. Midnight
+`compile:reference` checks source and generated ZKIR hashes. The benchmark
+rejects stale binaries/preimages and records their hashes. Dependencies are
+pinned in the Rust/npm lockfiles. Initial builds need network access. Midnight
 parameters use `MIDNIGHT_PP` or the normal parameter cache and are downloaded
 before timing if missing. Fixtures contain synthetic private witnesses and are
 ignored by Git, as are generated circuits, preimages, keys, and build outputs.
 
-## Layout and executor compatibility
+## Layout and compatibility
 
-- `crates/account-custody/src/`: native ledger schema, constructor, authorisation,
-  custody, and grant circuits.
-- `reference/`: unchanged Compact source and reference signer/ABI wrapper from
-  the pinned passport commit; generated code lives in its ignored `managed/`.
-- `scripts/fixtures.ts`: captures reference executions using synthetic accounts.
-- `bin/measure/`: ABI gate, differential execution, costs, and proof measurements.
-- `evidence/`: current results; `evidence/baseline/` retains the initial port's
-  results, original hashes, and original toolchain metadata. Its source is
-  available in the first commit of this PR (`6f9739b`). Historical paths in its
-  provenance describe the original workspace, not dependencies on current main.
+- `crates/account-custody/src/`: independently authored contract and ledger.
+- `reference/`: pinned Compact contracts, signers, and software authenticator.
+- `scripts/fixtures.ts`: reference execution capture with synthetic accounts.
+- `bin/measure/`: ABI/parity checks, costs, proving and verification measurements.
+- `evidence/`: current results; subdirectories retain the two historical v2 runs.
 
-`bin/measure/src/executor.rs` is vendored from Minocrab commit
-`537721ae7cd43ca7b3db09db784eb0f35ff437f4`, under its MIT licence in
-`vendor/LICENSE-MIT`. It normalises FAB atoms after `parse_field_repr`: that
-parser returns padded byte atoms, while the ledger's conversion from a
-`ValueAtom` reference to `()` requires an empty atom for an unused union arm.
-Without this fix the Compact reference itself fails unshielded deposit with
-`InvalidBuiltinDecode("()")`. Two regression tests cover the fix. Other executor
-changes are imports, formatting, and tests; circuit constraints and proving
-code are unaffected by normalisation.
+`bin/measure/src/executor.rs` and `simulator.rs` adapt Minocrab `537721a` under
+its [MIT licence](vendor/LICENSE-MIT). The executor normalises padded FAB atoms
+so absent union arms decode correctly in the ledger VM. The simulator uses the
+current backend's typed AST and public arithmetic helpers, adding current byte
+instructions and P256 generator multiplication. Unsupported instructions fail
+explicitly. Regression tests cross-check byte bounds/order and P256 multiplication
+against the unmodified backend. Fixture checks and every measured proof also use
+that backend, rather than relying on the simulator alone.
 
-Next acceptance gate for end-to-end comparison: funded native transaction
-construction and localnet conformance, including receiving-contract composition.
-Only then populate complete transaction sizes and full validation timings.
+The ledger VM dependencies remain at Minocrab's pinned `04c9c5d`; comparison with
+the current generated TypeScript checks the exercised VM effects and state.
+This does not claim full compatibility with every current ledger feature.
+The next end-to-end acceptance gate is funded native transaction construction
+and localnet conformance, including receiving-contract composition. Only then
+should full transaction sizes and validation times be populated.
