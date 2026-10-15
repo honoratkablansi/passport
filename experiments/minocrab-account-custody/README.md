@@ -35,15 +35,32 @@ median proving time, and median verification time. The
 [raw samples](evidence/benchmark.json) also retain key-generation timings;
 [static costs](evidence/costs.json) include separately labelled ZKIR JSON sizes.
 
-Two examples from the paired Apple M4 Max run (Compact / Minocrab):
+All 17 circuits with improved `k` are listed below. Proving times in parentheses
+are medians of three measured proofs after one warm-up, from the paired Apple M4 Max run.
 
-| Operation | `k` | Median proving | Median verification | Proof bytes |
-|---|---|---|---|---|
-| k256 grant unshielded withdrawal | 17 / 16 | 4.78 / 2.77 s | 3.82 / 4.21 ms | 6,336 / 6,336 |
-| P256 add device | 18 / 17 | 9.84 / 5.37 s | 3.36 / 3.42 ms | 6,336 / 6,336 |
+| Circuit | Compact `k` (proving time) | Minocrab `k` (proving time) |
+|---|---|---|
+| `add_device_with_k256` | 17 (4.74 s) | 16 (2.50 s) |
+| `add_device_with_p256` | 18 (9.84 s) | 17 (5.37 s) |
+| `append_inbox_with_k256` | 17 (4.65 s) | 16 (2.49 s) |
+| `append_inbox_with_p256` | 18 (10.68 s) | 17 (5.41 s) |
+| `publish_recovery_session_with_k256` | 17 (4.72 s) | 16 (2.58 s) |
+| `recover_cancel_with_k256` | 17 (4.59 s) | 16 (2.48 s) |
+| `recover_cancel_with_p256` | 18 (9.53 s) | 17 (5.35 s) |
+| `remove_device_with_k256` | 17 (4.60 s) | 16 (2.48 s) |
+| `revoke_all_grants_with_k256` | 17 (4.53 s) | 16 (2.49 s) |
+| `revoke_all_grants_with_p256` | 18 (9.45 s) | 17 (5.25 s) |
+| `revoke_grant_with_k256` | 17 (4.49 s) | 16 (2.40 s) |
+| `revoke_grant_with_p256` | 18 (9.33 s) | 17 (5.27 s) |
+| `rotate_enc_key_with_k256` | 17 (4.51 s) | 16 (2.39 s) |
+| `rotate_enc_key_with_p256` | 18 (9.28 s) | 17 (5.24 s) |
+| `withdraw_unshielded_with_grant_k256` | 17 (4.78 s) | 16 (2.77 s) |
+| `withdraw_unshielded_with_k256` | 17 (4.44 s) | 16 (2.36 s) |
+| `withdraw_unshielded_with_p256` | 18 (8.95 s) | 17 (5.17 s) |
 
-These are approximately 42% and 45% shorter proving times. No verification-speed
-improvement is claimed for these examples. Proof sizes match across all 52 pairs.
+k256 grant unshielded withdrawal and P256 add-device have approximately 42% and
+45% shorter proving times, respectively. No verification-speed improvement is
+claimed for these examples. Proof sizes match across all 52 pairs.
 
 The native implementation retains these optimisations:
 
