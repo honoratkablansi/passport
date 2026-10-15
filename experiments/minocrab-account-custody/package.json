@@ -1,0 +1,17 @@
+{
+  "name": "minocrab-account-custody-experiment",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "compile:reference": "compact compile +0.33.0-rc.2 --feature-zkir-v3 --skip-zk reference/contracts/account.compact reference/contracts/managed/account",
+    "fixtures": "tsx scripts/fixtures.ts"
+  },
+  "dependencies": {
+    "@midnight-ntwrk/compact-runtime": "0.18.0-rc.1",
+    "@noble/curves": "2.2.0"
+  },
+  "devDependencies": {
+    "tsx": "4.21.0"
+  }
+}
