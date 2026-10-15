@@ -32,9 +32,12 @@ def main():
     evidence.mkdir(exist_ok=True)
     gate = json.loads((evidence / "equivalence.json").read_text())
     assert gate["input_and_witness_mutations"] > 0, "run compare --mutations first"
+    assert gate["binary_sha256"] == hashlib.sha256(BIN.read_bytes()).hexdigest(), "binary changed; rerun compare --mutations"
     costs = json.loads(subprocess.check_output([BIN, "costs"], text=True))
     (evidence / "costs.json").write_text(json.dumps(costs, indent=2) + "\n")
-    names = sorted({row["circuit"] for row in costs})
+    assert input_hashes() == gate["input_sha256"], "circuit or preimage changed; rerun compare --mutations"
+    priority = "withdraw_unshielded_with_grant_k256"
+    names = sorted({row["circuit"] for row in costs}, key=lambda name: (name != priority, name))
     provenance = {
         "platform": platform.platform(), "machine": platform.machine(),
         "cpu": subprocess.check_output(["sysctl", "-n", "machdep.cpu.brand_string"], text=True).strip() if platform.system() == "Darwin" else platform.processor(),

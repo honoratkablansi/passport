@@ -315,7 +315,7 @@ pub fn settle(
     salt: B32<Private>,
     new_spent: F,
 ) {
-    auth.verify(c, challenge);
+    auth.verify_grant(c, challenge);
     let nonce = next_counter(c, g.nonce.field().private()).disclose_as::<Mutation>(c);
     g.nonce = Uint::from_field_unchecked(nonce);
     g.spent_commit = spent(c, salt, new_spent).disclose_as::<Mutation>(c);

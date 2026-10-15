@@ -246,7 +246,7 @@ impl GrantCalls {
         sig: Signature,
         envelope: Uint<8>,
     ) -> Discloses<(Mutation,)> {
-        let a = Auth::K256 { pk, sig, envelope };
+        let a = Auth::k256(c, pk, sig, envelope);
         let digest = scope.digest(c);
         let args = Preimage::default().bytes(grant_id).bytes(digest);
         custody::gate(c, &a, use_counter, "issue_grant", args);
@@ -262,7 +262,7 @@ impl GrantCalls {
         sig: Signature,
         envelope: Uint<8>,
     ) -> Discloses<(Mutation,)> {
-        let a = Auth::K256 { pk, sig, envelope };
+        let a = Auth::k256(c, pk, sig, envelope);
         let args = Preimage::default().bytes(grant_id);
         custody::gate(c, &a, use_counter, "revoke_grant", args);
         grants::revoke(c, grant_id);
@@ -276,13 +276,13 @@ impl GrantCalls {
         sig: Signature,
         envelope: Uint<8>,
     ) -> Discloses<(Mutation,)> {
-        let a = Auth::K256 { pk, sig, envelope };
+        let a = Auth::k256(c, pk, sig, envelope);
         let args = Preimage::default();
         custody::gate(c, &a, use_counter, "revoke_all_grants", args);
         grants::revoke_all(c);
         Discloses::of(())
     }
-    #[circuit]
+    #[circuit(max_k = 16)]
     pub fn withdraw_unshielded_with_grant_k256(
         c: &mut Circuit3,
         color: CoinColor<Private>,
@@ -295,7 +295,7 @@ impl GrantCalls {
         opening: SpendOpening,
         sig: Signature,
     ) -> Discloses<(Mutation,), ()> {
-        let a = Auth::K256 { pk, sig, envelope };
+        let a = Auth::k256(c, pk, sig, envelope);
         let (id, g) = grants::authenticate(c, &a, origin_hash, slot);
         let new_spent = grants::check_scope(
             c,
@@ -339,7 +339,7 @@ impl GrantCalls {
         opening: SpendOpening,
         sig: Signature,
     ) -> Discloses<(Mutation,), Change> {
-        let a = Auth::K256 { pk, sig, envelope };
+        let a = Auth::k256(c, pk, sig, envelope);
         let coin = custody::held_coin(c);
         let (id, g) = grants::authenticate(c, &a, origin_hash, slot);
         let new_spent = grants::check_scope(
@@ -391,7 +391,7 @@ impl GrantCalls {
         opening: SpendOpening,
         sig: Signature,
     ) -> Discloses<(Mutation,), SentAndChange> {
-        let a = Auth::K256 { pk, sig, envelope };
+        let a = Auth::k256(c, pk, sig, envelope);
         let coin = custody::held_coin(c);
         let (id, g) = grants::authenticate(c, &a, origin_hash, slot);
         let new_spent = grants::check_scope(

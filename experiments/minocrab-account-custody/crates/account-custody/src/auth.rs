@@ -75,10 +75,29 @@ pub enum Auth {
         pk: Secp256k1Point,
         sig: Signature,
         envelope: Uint<8>,
+        x: B32<Private>,
+        y: B32<Private>,
     },
 }
 
 impl Auth {
+    /// Bind the canonical coordinate bytes once to the point argument. Reuse
+    /// them for the weak-key guard, commitments, and signed challenge.
+    pub fn k256(c: &mut Circuit3, pk: Secp256k1Point, sig: Signature, envelope: Uint<8>) -> Self {
+        let (x, y) = c.into_coordinates(pk.point());
+        let x = c.into_bytes32(x);
+        let x = B32::from_typed(c, x);
+        let y = c.into_bytes32(y);
+        let y = B32::from_typed(c, y);
+        Self::K256 {
+            pk,
+            sig,
+            envelope,
+            x,
+            y,
+        }
+    }
+
     pub fn marker(&self) -> &'static str {
         match self {
             Self::Jubjub { .. } => "",
@@ -91,14 +110,7 @@ impl Auth {
                 let (x, y) = c.into_coordinates(pk.point());
                 Preimage::default().field(x).field(y)
             }
-            Self::K256 { pk, .. } => {
-                let (x, y) = c.into_coordinates(pk.point());
-                let x = c.into_bytes32(x);
-                let x = B32::from_typed(c, x);
-                let y = c.into_bytes32(y);
-                let y = B32::from_typed(c, y);
-                Preimage::default().bytes(x).bytes(y)
-            }
+            Self::K256 { x, y, .. } => Preimage::default().bytes(*x).bytes(*y),
         }
     }
     pub fn live_key(&self, c: &mut Circuit3) {
@@ -114,15 +126,10 @@ impl Auth {
                 let live = c.not(weak);
                 c.assert(live);
             }
-            Self::K256 { pk, .. } => {
-                let (x, y) = c.into_coordinates(pk.point());
-                let x = c.into_bytes32(x);
-                let x = B32::from_typed(c, x);
-                let y = c.into_bytes32(y);
-                let y = B32::from_typed(c, y);
+            Self::K256 { x, y, .. } => {
                 let zero = B32::pad(c, "").private();
-                let xzero = bytes_eq(c, x, zero);
-                let yzero = bytes_eq(c, y, zero);
+                let xzero = bytes_eq(c, *x, zero);
+                let yzero = bytes_eq(c, *y, zero);
                 let weak = c.mul(xzero, yzero);
                 let live = c.not(weak);
                 c.assert(live);
@@ -200,7 +207,9 @@ impl Auth {
                 let rhs = c.add(r.point(), term);
                 c.assert_eq(lhs, rhs);
             }
-            Self::K256 { pk, sig, envelope } => {
+            Self::K256 {
+                pk, sig, envelope, ..
+            } => {
                 let two = c.constant(2u64).private();
                 let valid = c.less_than(envelope.field(), two, 8);
                 c.assert(valid);
@@ -222,6 +231,26 @@ impl Auth {
                 let valid = secp256k1_ecdsa_verify(c, &digest, &sig, pk.point());
                 c.assert(valid);
             }
+        }
+    }
+    /// Spend grants admit envelope zero only. Keep that constraint here as
+    /// well as at authentication, and avoid hashing the unreachable envelope.
+    pub fn verify_grant(&self, c: &mut Circuit3, challenge: B32<Private>) {
+        match self {
+            Self::K256 {
+                pk, sig, envelope, ..
+            } => {
+                let zero = c.constant(0u64).private();
+                c.assert_eq(envelope.field(), zero);
+                let digest = Preimage::default().bytes(challenge).hash(c);
+                let signature = Secp256k1EcdsaSignature {
+                    r: sig.r.scalar(),
+                    s: sig.s.scalar(),
+                };
+                let valid = secp256k1_ecdsa_verify(c, &digest, &signature, pk.point());
+                c.assert(valid);
+            }
+            Self::Jubjub { .. } => self.verify(c, challenge),
         }
     }
     pub fn authorise(&self, c: &mut Circuit3, counter: Uint<64>, challenge: B32<Private>) {

@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "compile:reference": "compact compile +0.33.0-rc.2 --feature-zkir-v3 --skip-zk reference/contracts/account.compact reference/contracts/managed/account",
+    "compile:reference": "compact compile +0.33.0-rc.2 --feature-zkir-v3 --skip-zk reference/contracts/account.compact reference/contracts/managed/account && python3 scripts/check-reference.py",
     "fixtures": "tsx scripts/fixtures.ts"
   },
   "dependencies": {

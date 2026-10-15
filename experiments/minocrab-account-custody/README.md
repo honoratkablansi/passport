@@ -1,152 +1,154 @@
 # Account custody in Minocrab
 
-Independent Rust/Minocrab port of `../../contract/contracts/account.compact`:
-the constructor state, all 30 state-changing entry points, JubJub and k256
-device authorisation, cross-arm enrolment, stateless shielded custody,
-unshielded balance mirrors, encrypted inbox, and scoped grants. The Rust
-implementation does not import or translate Compact's circuit instructions.
-The Compact artifacts are the comparison oracle only.
+An independent Rust/Minocrab implementation of the **30-entry-point,
+`spec_version = 2` account custody reference** at passport commit
+[`55aa2876`](https://github.com/midnightntwrk/passport/tree/55aa2876edadc5aa873b6693d563d04342e99a88/contract).
+It covers the constructor, JubJub and k256 device authorisation, cross-arm
+enrolment, shielded custody, unshielded balance mirrors, encrypted inbox,
+and scoped grants. The implementation does not translate Compact instructions;
+the pinned Compact implementation is the independent comparison oracle.
 
-This is an **offline circuit experiment**, not yet a replacement deployment
-package. The independent Rust constructor builds the initial ledger state;
-installing verification keys and integrating transaction construction with a
-wallet remain deployment work. Pure signing/challenge helpers are reproduced
-inside the Rust circuits where used, while fixture generation deliberately
-uses the existing reference TypeScript signers as an independent oracle.
+**Scope:** this is the historical reference used when the experiment started.
+The snapshot in `reference/` makes that comparison reproducible on current
+main, whose reference has since gained caller-bound grants and recovery.
+Those additions and the separate p256 implementation are outside this port.
+No files in the live `contract/` tree are changed by this experiment.
 
-## Results and limits
+This is an offline circuit experiment, not a deployment package. Constructor
+state is reproduced independently, but verification-key installation, wallet
+integration, funded transactions, and on-node conformance remain future work.
 
-On the Apple M4 Max used for this run, all 30 entry points retain the same
-`k` and proof byte count. Timings are close; three samples per implementation
-are insufficient to claim a meaningful speedup. For example:
+## What the optimisations demonstrate
 
-| Unshielded withdrawal | Compact / Minocrab k | Prove seconds | Verify milliseconds | Proof bytes |
-|---|---|---|---|---|
-| JubJub device | 15 / 15 | 1.130 / 1.132 | 3.14 / 3.25 | 5744 / 5744 |
-| k256 device | 16 / 16 | 2.394 / 2.354 | 3.45 / 3.45 | 6336 / 6336 |
+The initial Rust port retained the reference's `k` on all 30 entry points.
+Its [baseline measurements](evidence/baseline/report.md) are retained separately.
+The optimised implementation applies three local changes:
 
-- [Cost table](evidence/costs.json): rows and `k` for both implementations,
-  using the same pinned Midnight cost model. `k` is unchanged on all 30
-  entry points in the initial port; fewer rows do not necessarily lower `k`.
-- [Execution evidence](evidence/equivalence.json): reference executions
-  captured from the existing generated TypeScript, then replayed separately
-  through both circuits and Midnight's Impact VM. Final state, outputs, and
-  kernel effects must agree. Both proof preimages must pass Midnight's own
-  `Zkir::check`. Covers both owner arms × both grantee arms, cross-arm device
-  enrolment, shielded exact spends/change, connector envelopes, and high-S
-  ECDSA signatures. All **126 executions** pass.
-- `compare --mutations` changes every argument/witness field slot individually
-  and requires matching acceptance and, when accepted, matching outcomes.
-  All **2,416 mutations** pass, alongside **248 context checks** covering
-  replay, wrong-account authorisation, and grant expiry boundaries.
-  This is differential testing, not a
-  formal equivalence proof or the full on-node conformance suite.
-- [Benchmark results](evidence/benchmark.json) and [table](evidence/report.md)
-  are produced by the benchmark script. Proving and verification use real
-  cryptographic proofs, not estimates or HTTP request duration.
-- **Complete transaction sizes are not measured yet.** `transaction_bytes`
-  stays `null`. Proof bytes and ZKIR JSON bytes are separate metrics and must
-  not be presented as transaction bytes. A funded transaction also includes
-  transcripts, shielded offers/proofs, unshielded offers, fee funding, and
-  signatures. Likewise, proof verification time excludes transaction
-  validation, ledger execution, and network latency.
+1. **Reuse k256 coordinate bytes.** Derive the canonical byte encodings once
+   from the point argument and reuse them in weak-key rejection, commitments,
+   and challenges. The bytes are never supplied as independent witnesses.
+2. **Specialise grant signature verification.** Spend grants already require
+   envelope zero. Retain that assertion and omit the unreachable connector
+   digest. Device authorisation continues to support both envelopes.
+3. **Reuse shielded output commitments.** Hash the sent coin once and reuse
+   its commitment on self-transfers. Specialise the recipient arm at circuit
+   construction, retaining nullifier claims, self-receive claims, change
+   outputs, checked subtraction, and the zero payload for absent change.
 
-Consequently this establishes a reproducible circuit-level comparison, but
-does not yet complete the requested end-to-end transaction comparison.
+The k256 unshielded grant withdrawal drops from **`k=17` to `k=16`**.
+On the recorded Apple M4 Max run, its median proving time falls from **4.40 s
+to 2.43 s (45%)**. Proof size stays at **6,336 bytes**, and median cryptographic
+verification is **3.48 / 3.71 ms** (Compact / Minocrab); no verification-speed
+gain is claimed. A generated `max_k = 16` test prevents regression. The other
+savings and real proving/verification samples are in the [paired report](evidence/report.md),
+[raw measurements](evidence/benchmark.json), and [cost table](evidence/costs.json).
+
+These changes are not all exclusive to Minocrab. Coordinate reuse and grant
+envelope specialisation can also be expressed in Compact. Improving and
+validating the live Compact reference is a separate work stream. This comparison measures an
+optimised native Rust implementation against the pinned, unchanged reference.
+
+`k` is not determined by the displayed ordinary-row count alone: chip/table
+configuration and reserved rows matter, and ordinary-row cost can itself change
+when configured at another `k`. A smaller `k` primarily targets proving time and
+memory; it does not guarantee a smaller proof or faster verification.
+
+## Parity evidence
+
+[Execution evidence](evidence/equivalence.json) records **150 executions** of
+the reference's generated TypeScript, replayed separately through both circuits
+and Midnight's Impact VM. Post-state, outputs, and kernel effects agree, and
+both proof preimages pass Midnight's own `Zkir::check`. Input/output ABI and
+communications-commitment mode match across the complete circuit registry.
+The native constructor state is checked against reference initial states.
+
+Coverage includes both owner arms × both grantee arms, cross-arm enrolment,
+connector envelopes, both ECDSA S forms, shielded exact spends and change,
+external contract recipients, and self-transfers. The harness also passes
+**3,120 single-slot input/witness mutations** and **304 context checks** for
+replay, wrong-account authorisation, and grant expiry boundaries. There are
+33 Rust tests, including disclosure checks, the `k` budget, and executor
+regressions. This is differential evidence, not a formal equivalence proof or
+the full on-node conformance suite.
+
+The circuits can reorder ledger reads. Each proves its own transcript of the
+same operation against the same initial state and arguments; public-input
+vectors and proving keys are not claimed to be interchangeable. The historical
+reference's documented revocation limitations are preserved, not silently fixed.
+
+## Measurement limits
+
+**Complete transaction sizes are not measured.** `transaction_bytes` is `null`.
+Proof bytes and ZKIR JSON bytes are separately labelled and must not be read as
+transaction size. A funded transaction also carries transcripts, shielded
+proofs/offers, unshielded offers, fee funding, and signatures. Verification
+samples measure cryptographic proof verification, excluding ledger replay,
+transaction validation, and network latency.
+
+Each paired measurement uses a release build in a fresh subprocess, alternating
+which implementation runs first. Parameter loading precedes the key-generation
+timer. Key generation is timed separately; one proof warms the process and
+three proofs are timed, retaining every proving and verification sample.
+The report uses medians. Avoid concurrent CPU-heavy work; three samples do not
+support conclusions about small timing differences.
+
+The last successful fixture per circuit supplies the benchmark preimage:
+shielded withdrawals use the exact-spend branch and an external recipient.
+Self-transfers and change are covered by parity checks but are not separately
+timed. Baseline and optimised timings come from separate runs; the new paired
+reference/Minocrab measurements are the primary timing comparison.
 
 ## Reproduce
 
-Prerequisites: Rust, Python 3, the reference `contract/node_modules` installation,
-and the pinned Compact compiler. Run commands from this directory:
+Prerequisites: Rust, Node.js/npm, Python 3, and Compact compiler `0.33.0-rc.2`.
+From this directory:
 
 ```sh
-# Check or recreate the pinned reference artifacts separately; no reference edits.
-compact compile +0.33.0-rc.2 --feature-zkir-v3 --skip-zk \
-  ../../contract/contracts/account.compact artifacts/reference-fresh
-
-# Synthetic accounts only; generated fixture files include private witness values.
+npm ci
+npm run compile:reference
 npm run fixtures
-cargo test -p project-account-custody
+cargo fmt --all -- --check
+cargo clippy -p project-account-custody -p project-custody-measure --all-targets -- -D warnings
+cargo test -p project-account-custody -p project-custody-measure
 cargo build --release -p project-custody-measure
 target/release/project-custody-measure compare --mutations
-
-# Sequential paired measurements: one warm-up and three timed proofs per side.
 python3 scripts/bench.py
-# Resume only with the same binary, lockfile, inputs, and configuration.
+# Resume only with the same binary, lockfile, equivalence evidence and inputs.
 python3 scripts/bench.py --resume
-
-cargo fmt --all -- --check
-cargo clippy -p project-account-custody -p project-custody-measure -- -D warnings
-cargo test -p project-custody-measure
 ```
 
-The first dependency build needs network access. The prover uses Midnight's
-parameter cache (`MIDNIGHT_PP`, or the normal cache location); missing parameter
-files are downloaded before the key-generation timer starts.
+`compile:reference` verifies source and generated ZKIR hashes against
+[reference provenance](reference/provenance.json). The benchmark refuses stale
+binaries or preimages and records their hashes. Dependencies are pinned in the
+Rust/npm lockfiles; [run provenance](evidence/provenance.json) identifies the
+validated sources and toolchain. Initial builds need network access. Midnight
+parameters use `MIDNIGHT_PP` or the normal parameter cache and are downloaded
+before timing if missing. Fixtures contain synthetic private witnesses and are
+ignored by Git, as are generated circuits, preimages, keys, and build outputs.
 
-Each benchmark runs in a fresh subprocess, alternating which implementation
-goes first. Key generation is timed separately; one proof warms the process;
-all measured proving and verification samples are retained. Avoid concurrent
-CPU-heavy work. The report uses medians and records the machine, binary hash,
-lockfile hash, and iteration count. The final successful fixture for each circuit
-supplies its benchmark preimage; shielded withdrawal benchmarks therefore use
-the exact-spend branch. Branch-specific timings should be added before drawing
-conclusions about change-bearing transactions.
+## Layout and executor compatibility
 
-The two circuits may reorder ledger reads. They prove their respective
-transcripts of the same operation against the same initial state and arguments;
-this does **not** claim equal public-input vectors or interchangeable proving
-keys. Their communicated arguments and return values remain ABI-compatible.
-
-The recorded benchmark preceded the constructor test and expanded fixture
-matrix. Its actual binary and lockfile hashes remain in `benchmark.json`;
-[benchmark input hashes](evidence/benchmark-inputs.json) identify the native
-circuits and proof preimages used. Final validation confirms all 30 native
-circuit files are byte-for-byte identical to those measured. The final lockfile
-hash in `provenance.json` reflects the constructor's additional direct
-dependencies; the dependency revisions are unchanged. New benchmark runs also
-record input hashes directly in their configuration and reject changes during
-measurement. [Toolchain versions](evidence/toolchain.json) accompany the results.
-
-## Layout
-
-| Path | Purpose |
-|---|---|
-| `crates/account-custody/src/lib.rs` | Ledger schema, deposits, circuit registry |
-| `crates/account-custody/src/constructor.rs` | Independent initial state |
-| `crates/account-custody/src/auth.rs` | FAB hashing, device commitments, both signature schemes |
-| `crates/account-custody/src/custody.rs` | Shared custody operations and witness binding |
-| `crates/account-custody/src/entrypoints.rs` | Device circuit entry points |
-| `crates/account-custody/src/grants.rs` | Grant identity, scope, lifecycle, and settlement |
-| `crates/account-custody/src/grant_entrypoints.rs` | Grant circuit entry points |
-| `scripts/fixtures.ts` | Capture real reference execution and synthetic inputs |
-| `bin/measure/` | ABI coverage gate, differential execution, cost/proof measurements |
-| `evidence/provenance.json` | Reference/compiler/dependency pins and artifact hashes |
-
-## Executor compatibility fix
+- `crates/account-custody/src/`: native ledger schema, constructor, authorisation,
+  custody, and grant circuits.
+- `reference/`: unchanged Compact source and reference signer/ABI wrapper from
+  the pinned passport commit; generated code lives in its ignored `managed/`.
+- `scripts/fixtures.ts`: captures reference executions using synthetic accounts.
+- `bin/measure/`: ABI gate, differential execution, costs, and proof measurements.
+- `evidence/`: current results; `evidence/baseline/` retains the initial port's
+  results, original hashes, and original toolchain metadata. Its source is
+  available in the first commit of this PR (`6f9739b`). Historical paths in its
+  provenance describe the original workspace, not dependencies on current main.
 
 `bin/measure/src/executor.rs` is vendored from Minocrab commit
-`537721ae7cd43ca7b3db09db784eb0f35ff437f4`, under its MIT licence
-(`vendor/LICENSE-MIT`). It uses the upstream simulator and Midnight VM.
-The only behavioural change normalises FAB atoms after `parse_field_repr`:
-that parser returns padded byte atoms, while the ledger's `TryFrom<ValueAtom>
-for ()` requires an empty atom for the unused half of a token/recipient union.
-Without normalisation **the Compact reference itself** fails unshielded deposit
-in the executor with `InvalidBuiltinDecode("()")`. The fix changes neither
-circuit, hashes, constraints, nor proving code. Other changes are imports and
-formatting to embed the module.
+`537721ae7cd43ca7b3db09db784eb0f35ff437f4`, under its MIT licence in
+`vendor/LICENSE-MIT`. It normalises FAB atoms after `parse_field_repr`: that
+parser returns padded byte atoms, while the ledger's conversion from a
+`ValueAtom` reference to `()` requires an empty atom for an unused union arm.
+Without this fix the Compact reference itself fails unshielded deposit with
+`InvalidBuiltinDecode("()")`. Two regression tests cover the fix. Other executor
+changes are imports, formatting, and tests; circuit constraints and proving
+code are unaffected by normalisation.
 
-## What parity must preserve
-
-The port retains the reference's behaviour, including documented limitations;
-this experiment does not silently fix its device revocation design. In
-particular: entry-based enrolment/removal, checked integer overflow, exact FAB
-hash encodings and domain separators, both ECDSA S forms, envelope selection,
-weak-key rejection, ordered held-coin witness binding, independent grant/device
-nonces, spent commitments, grant epochs/generations, expiry, recipient pins,
-reserved window bounds, and change-entry insertion all belong to the comparison.
-
-Next acceptance gate: native transaction construction and funded localnet
-execution against the reference conformance suites, including direct transfers
-to a receiving custody contract. Only then populate complete transaction byte
-sizes and report full transaction verification times.
+Next acceptance gate for end-to-end comparison: funded native transaction
+construction and localnet conformance, including receiving-contract composition.
+Only then populate complete transaction sizes and full validation timings.

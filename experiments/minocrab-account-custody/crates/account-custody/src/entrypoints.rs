@@ -237,14 +237,15 @@ impl DeviceCalls {
         let bytes = c.into_bytes32(zero);
         let scalar = c.from_bytes32(bytes);
         let scalar = Secp256k1Scalar::from_scalar(scalar);
-        let a = Auth::K256 {
+        let a = Auth::k256(
+            c,
             pk,
-            sig: Signature {
+            Signature {
                 r: scalar,
                 s: scalar,
             },
             envelope,
-        };
+        );
         custody::activate(c, &a, salt);
         Discloses::of(())
     }
@@ -257,7 +258,7 @@ impl DeviceCalls {
         sig: Signature,
         envelope: Uint<8>,
     ) -> Discloses<(Mutation,), ()> {
-        let a = Auth::K256 { pk, sig, envelope };
+        let a = Auth::k256(c, pk, sig, envelope);
         custody::gate(
             c,
             &a,
@@ -277,7 +278,7 @@ impl DeviceCalls {
         sig: Signature,
         envelope: Uint<8>,
     ) -> Discloses<(Mutation,), ()> {
-        let a = Auth::K256 { pk, sig, envelope };
+        let a = Auth::k256(c, pk, sig, envelope);
         custody::gate(
             c,
             &a,
@@ -298,7 +299,7 @@ impl DeviceCalls {
         sig: Signature,
         envelope: Uint<8>,
     ) -> Discloses<(Mutation,), ()> {
-        let a = Auth::K256 { pk, sig, envelope };
+        let a = Auth::k256(c, pk, sig, envelope);
         custody::gate(
             c,
             &a,
@@ -318,7 +319,7 @@ impl DeviceCalls {
         sig: Signature,
         envelope: Uint<8>,
     ) -> Discloses<(Mutation,), ()> {
-        let a = Auth::K256 { pk, sig, envelope };
+        let a = Auth::k256(c, pk, sig, envelope);
         custody::gate(
             c,
             &a,
@@ -340,7 +341,7 @@ impl DeviceCalls {
         sig: Signature,
         envelope: Uint<8>,
     ) -> Discloses<(Mutation,), ()> {
-        let a = Auth::K256 { pk, sig, envelope };
+        let a = Auth::k256(c, pk, sig, envelope);
         custody::gate(
             c,
             &a,
@@ -365,7 +366,7 @@ impl DeviceCalls {
         sig: Signature,
         envelope: Uint<8>,
     ) -> Discloses<(Mutation,), Change> {
-        let a = Auth::K256 { pk, sig, envelope };
+        let a = Auth::k256(c, pk, sig, envelope);
         let coin = custody::held_coin(c);
         custody::gate(
             c,
@@ -392,7 +393,7 @@ impl DeviceCalls {
         sig: Signature,
         envelope: Uint<8>,
     ) -> Discloses<(Mutation,), SentAndChange> {
-        let a = Auth::K256 { pk, sig, envelope };
+        let a = Auth::k256(c, pk, sig, envelope);
         let coin = custody::held_coin(c);
         custody::gate(
             c,

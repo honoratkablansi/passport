@@ -130,7 +130,29 @@ fn artifacts() -> Result<BTreeMap<String, (IrSource, IrSource)>> {
     Ok(pairs)
 }
 
+fn sha256(bytes: &[u8]) -> String {
+    midnight_base_crypto::hash::persistent_hash(bytes)
+        .0
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
 fn compare(pairs: &BTreeMap<String, (IrSource, IrSource)>, mutations: bool) -> Result<()> {
+    let evidence = root().join("evidence/equivalence.json");
+    if evidence.exists() {
+        std::fs::remove_file(&evidence)?;
+    }
+    let mut input_sha256 = BTreeMap::new();
+    for name in pairs.keys() {
+        for directory in [
+            "reference/contracts/managed/account/zkir",
+            "artifacts/minocrab",
+        ] {
+            let path = format!("{directory}/{name}.zkir");
+            input_sha256.insert(path.clone(), sha256(&std::fs::read(root().join(&path))?));
+        }
+    }
     let filenames: Vec<String> =
         serde_json::from_slice(&std::fs::read(root().join("fixtures/private/index.json"))?)?;
     let files: Vec<_> = filenames
@@ -305,6 +327,10 @@ fn compare(pairs: &BTreeMap<String, (IrSource, IrSource)>, mutations: bool) -> R
             std::fs::create_dir_all(&path)?;
             let mut bytes = Vec::new();
             midnight_serialize::tagged_serialize(&executed.preimage, &mut bytes)?;
+            input_sha256.insert(
+                format!("artifacts/preimages/{side}/{}.preimage", f.name),
+                sha256(&bytes),
+            );
             std::fs::write(path.join(format!("{}.preimage", f.name)), bytes)?;
         }
         covered.insert(f.name.clone());
@@ -319,7 +345,7 @@ fn compare(pairs: &BTreeMap<String, (IrSource, IrSource)>, mutations: bool) -> R
     std::fs::write(
         root().join("evidence/equivalence.json"),
         serde_json::to_vec_pretty(
-            &serde_json::json!({"cases": cases, "input_and_witness_mutations": mutation_count, "context_checks": context_checks}),
+            &serde_json::json!({"cases": cases, "input_and_witness_mutations": mutation_count, "context_checks": context_checks, "input_sha256": input_sha256, "binary_sha256": sha256(&std::fs::read(std::env::current_exe()?)?)}),
         )?,
     )?;
     Ok(())

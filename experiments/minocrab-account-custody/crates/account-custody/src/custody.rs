@@ -122,18 +122,74 @@ pub fn withdraw_shielded(
     };
     let amount = amount.disclose_as::<Mutation>(c);
     let recipient = recipient.disclose_as::<Mutation>(c);
-    let zero = B32::pad(c, "");
-    let (left, right) = if to_contract {
-        (zero, recipient)
-    } else {
-        (recipient, zero)
+    // The recipient arm is fixed by each exported circuit. Compute the output
+    // commitment once, reusing it when a contract sends to itself.
+    let me = kernel::self_address(c).bytes();
+    let nullifier = coin_nullifier_contract(c, &coin.downcast(), &me);
+    kernel::claim_zswap_nullifier(c, &nullifier);
+    let balance = Uint::<128, Public>::from_field_unchecked(coin.value);
+    let change = balance.sub(c, amount).field();
+    let output = ShieldedCoinInfo3 {
+        nonce: successor_nonce(c, b"midnight:kernel:nonce_evolve", coin.nonce),
+        color: coin.color,
+        value: amount.field(),
     };
-    let recipient = CoinRecipient {
-        is_left: c.constant(u64::from(!to_contract)),
-        left: ZswapCoinPublicKey::from_limbs([left.hi, left.lo]),
-        right: ContractAddress::from_limbs([right.hi, right.lo]),
+    let is_user = c.constant(u64::from(!to_contract));
+    let commitment = coin_commitment_to(c, &output, is_user.erase(), &recipient);
+    kernel::claim_zswap_coin_spend(c, &commitment);
+    if to_contract {
+        let hi = c.test_eq(recipient.hi, me.hi);
+        let lo = c.test_eq(recipient.lo, me.lo);
+        let is_self = c.mul(hi, lo);
+        c.when(is_self, |c| {
+            kernel::claim_zswap_coin_receive(c, &commitment)
+        });
+    }
+    let spent_all = c.test_eq(change, 0u64);
+    let has_change = c.not(spent_all);
+    let change_coin = ShieldedCoinInfo3 {
+        nonce: successor_nonce(c, b"midnight:kernel:nonce_evolve/2", coin.nonce),
+        color: coin.color,
+        value: change,
     };
-    kernel::send_shielded(c, &coin, &recipient, amount)
+    let change_commitment = coin_commitment_to_contract(c, &change_coin, &me);
+    c.when(has_change, |c| {
+        kernel::claim_zswap_coin_spend(c, &change_commitment);
+        kernel::claim_zswap_coin_receive(c, &change_commitment);
+    });
+    // The unused Maybe payload must remain all-zero, including exact spends.
+    let nonce = change_coin.nonce.bytes();
+    let color = change_coin.color.bytes();
+    let change_value = ShieldedCoinInfo3 {
+        nonce: CoinNonce::from_limbs([
+            c.cond_select(spent_all, 0u64, nonce.hi),
+            c.cond_select(spent_all, 0u64, nonce.lo),
+        ]),
+        color: CoinColor::from_limbs([
+            c.cond_select(spent_all, 0u64, color.hi),
+            c.cond_select(spent_all, 0u64, color.lo),
+        ]),
+        value: c.cond_select(spent_all, 0u64, change),
+    };
+    ShieldedSendResult {
+        sent: output,
+        change: Maybe {
+            is_some: Bool::from_field_unchecked(has_change),
+            value: change_value,
+        },
+    }
+}
+
+fn successor_nonce<const N: usize>(
+    c: &mut Circuit3,
+    domain: &[u8; N],
+    nonce: CoinNonce<Public>,
+) -> CoinNonce<Public> {
+    let domain = Bytes::<N, Public>::constant(c, domain);
+    let nonce = hash::degrade_to_transient(c, &nonce.bytes());
+    let hash = c.transient_hash(&[domain.field().erase(), nonce.erase()]);
+    let bytes = hash::upgrade_from_transient(c, hash);
+    CoinNonce::from_limbs([bytes.hi, bytes.lo])
 }
 
 pub type Change = Maybe<ShieldedCoinInfo3<Public>, Public>;

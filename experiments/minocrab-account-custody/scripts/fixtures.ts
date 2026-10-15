@@ -64,7 +64,8 @@ for (const [arm, grantArm, envelope] of [
       : (owner as K256Device).sign(challenge({ bytes: address }, owner.pk, ...challengeArgs, nonce), counter);
     // The reference deliberately accepts both ECDSA S forms.
     if (a.arm === 'k256' && envelope === 1n && counter % 2n === 0n) a.sig.s = SECP256K1_N - a.sig.s;
-    const result = await call(`${op}_with_${arm}`, [...args, ...authArgs(a)]);
+    const selfSend = op === 'withdraw_shielded_to_contract' && Buffer.from(args[0].bytes).equals(Buffer.from(address));
+    const result = await call(`${op}_with_${arm}`, [...args, ...authArgs(a)], `${op}_with_${arm}${selfSend ? '-self' : ''}`);
     counter++;
     return result;
   }
@@ -81,6 +82,10 @@ for (const [arm, grantArm, envelope] of [
   await device('withdraw_unshielded', [color, 10n, recipient]);
   for (const amount of [100n, 1000n]) {
     for (const op of ['withdraw_shielded', 'withdraw_shielded_to_contract']) {
+      if (op === 'withdraw_shielded_to_contract') {
+        const self = { bytes: address };
+        await device(op, [self, color, amount], [self, color, amount, coin]);
+      }
       await device(op, [recipient, color, amount], [recipient, color, amount, coin]);
     }
   }
@@ -99,19 +104,21 @@ for (const [arm, grantArm, envelope] of [
   for (const op of ['withdraw_unshielded', 'withdraw_shielded', 'withdraw_shielded_to_contract']) {
     const amounts = op === 'withdraw_unshielded' ? [10n] : [100n, 1000n];
     for (const amount of amounts) {
-      const g = ledger(current).grants.lookup(id);
-      const entry = b(33, 192), enc = b(21);
-      const args = op === 'withdraw_unshielded' ? [color, amount, recipient] : [recipient, color, amount, entry, enc];
-      const challengeArgs = [id, g.issued_at, ...args, ...(op === 'withdraw_unshielded' ? [] : [coin]), g.nonce];
-      const challenge = (pure as any)[`challenge_${op}_with_grant_${grantArm}`];
-      const a: any = grantArm === 'jubjub'
-        ? (grantee as JubjubGrantee).sign((r, grind) => challenge({ bytes: address }, r, grantee.pk, ...challengeArgs, grind))
-        : (grantee as K256Grantee).sign(challenge({ bytes: address }, grantee.pk, ...challengeArgs));
-      if (grantArm === 'k256' && envelope === 1n) a.sig.s = SECP256K1_N - a.sig.s;
-      const tail = [grantee.pk, ...(grantArm === 'k256' ? [0n] : []), origin, slot, scopeSalt, 0n, b(0), 1000n, spent,
-        ...(grantArm === 'jubjub' ? [a.sig_r, a.sig_s, a.grind_nonce] : [a.sig])];
-      await call(`${op}_with_grant_${grantArm}`, [...args, ...tail]);
-      spent += amount;
+      for (const destination of op === 'withdraw_shielded_to_contract' ? [{ bytes: address }, recipient] : [recipient]) {
+        const g = ledger(current).grants.lookup(id);
+        const entry = b(33, 192), enc = b(21);
+        const args = op === 'withdraw_unshielded' ? [color, amount, destination] : [destination, color, amount, entry, enc];
+        const challengeArgs = [id, g.issued_at, ...args, ...(op === 'withdraw_unshielded' ? [] : [coin]), g.nonce];
+        const challenge = (pure as any)[`challenge_${op}_with_grant_${grantArm}`];
+        const a: any = grantArm === 'jubjub'
+          ? (grantee as JubjubGrantee).sign((r, grind) => challenge({ bytes: address }, r, grantee.pk, ...challengeArgs, grind))
+          : (grantee as K256Grantee).sign(challenge({ bytes: address }, grantee.pk, ...challengeArgs));
+        if (grantArm === 'k256' && envelope === 1n) a.sig.s = SECP256K1_N - a.sig.s;
+        const tail = [grantee.pk, ...(grantArm === 'k256' ? [0n] : []), origin, slot, scopeSalt, 0n, b(0), 1000n, spent,
+          ...(grantArm === 'jubjub' ? [a.sig_r, a.sig_s, a.grind_nonce] : [a.sig])];
+        await call(`${op}_with_grant_${grantArm}`, [...args, ...tail], `${op}_with_grant_${grantArm}${destination.bytes === address ? '-self' : ''}`);
+        spent += amount;
+      }
     }
   }
   await device('revoke_grant', [id]);
