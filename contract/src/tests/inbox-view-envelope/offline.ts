@@ -8,7 +8,7 @@ import { p256Challenges } from '../../wallet/signer-p256.js';
 import { assertionMaterial } from '../../wallet/webauthn.js';
 import { generateEncKeyPair, sealInboxEntry, openInboxEntry } from '../../wallet/inbox.js';
 import { ENVELOPE_SIZE, LAYOUT, contextBytes, concat, random, readerFromPrf,
-  sealViewEnvelope, openViewEnvelope, findCurrentEnvelope } from './codec.js';
+  sealViewEnvelope, openViewEnvelope, findCurrentEnvelope, recipientTag } from './codec.js';
 
 const a = softwarePasskey(), b = softwarePasskey();
 const recovery = JubjubDevice.generate();
@@ -69,6 +69,10 @@ await assert.rejects(() => sealViewEnvelope(context, new Uint8Array(32).fill(255
 const poison = await sealViewEnvelope(context, readerB.publicKey, random(), b.pk);
 // Per-record tags: two envelopes sealed to the same reader are not linkable by tag.
 assert.notDeepEqual(poison.slice(2, 34), envelope.slice(2, 34), 'recipient tag must differ per record');
+// The public-key holder can identify both records despite their distinct tags.
+for (const record of [poison, envelope]) {
+  assert.deepEqual(recipientTag(readerB.publicKey, record.slice(34, 66), context), record.slice(2, 34));
+}
 assert.equal(await openViewEnvelope(context, readerB.secretKey, poison, view.publicKey), null, 'decryptable wrong key rejected');
 const coin = { nonce: random(), color: random(), value: 17n };
 const coinRecord = sealInboxEntry(view.publicKey, coin);
@@ -103,6 +107,17 @@ assert.equal(rejectedCandidates.length, 1);
 assert.ok(rejectedCandidates[0].every(v => v === 0), 'rejected candidate secret zeroed');
 await assert.rejects(() => findCurrentEnvelope(context, readerB.secretKey, [wrongMetadata], view.publicKey, () => false),
   /no current viewing envelope/);
+for (const asynchronous of [false, true]) {
+  let retained: Uint8Array | undefined;
+  const cancelled = new Error('credential ceremony cancelled');
+  await assert.rejects(() => findCurrentEnvelope(context, readerB.secretKey, [envelope], view.publicKey,
+    candidate => {
+      retained = candidate.viewSecret;
+      if (asynchronous) return Promise.reject(cancelled);
+      throw cancelled;
+    }), error => error === cancelled);
+  assert.ok(retained?.every(v => v === 0), 'validator failure clears candidate secret');
+}
 
 // Stage the next viewing secret using B's PUBLIC reader key only. B performs
 // no PRF or signing operation while the owner stages and activates rotation.
@@ -125,7 +140,8 @@ const report = {
   readerCounts: [1, 2, 5, 10, 100].map(readers => ({ readers, bytesPerGeneration: readers * ENVELOPE_SIZE })),
   controls: { everyByteTamperRejected: rejected, wrongReader: true, wrongContext: true,
     invalidX25519: true, poisonKey: true, substitutedSigningMetadata: true, validatorSkipsSubstitutedMetadata: true,
-    perRecordRecipientTags: true, staleAndStagedKeys: true,
+    perRecordRecipientTags: true, knownReaderPublicKeyIdentifiesRecords: true,
+    validatorFailureClearsSecret: true, staleAndStagedKeys: true,
     independentOpenSSL: true, actualP256CompiledCircuitCalls: true, legacyReaderSkips: true, offlineRecipientReseal: true },
   limits: 'Software ES256 authenticator and random synthetic PRF outputs. Compiled-circuit simulation, not a node proof or browser/PRF-sync test.',
 };

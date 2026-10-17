@@ -1,8 +1,8 @@
 # Viewing-key envelopes: internal review notes
 
-**Draft for initial internal review.** Review the work and iterate before
-deciding on wider discussion. The items below are internal design and
-evidence-review points.
+This PR is a bounded experiment for review. The device-restoration result,
+trusted-roster assumption and evidence limits below define its scope; merging
+it does not select a production reader/recovery protocol.
 
 ## Authority boundaries
 
@@ -86,10 +86,11 @@ and the [experiment guide](README.md) for the proof/storage breakdown.
   deposits can also carry arbitrary bytes. The restored secret is checked
   against current `enc_key`; recipient-roster additions need their own
   authenticated provenance. This prototype retains a trusted local roster.
-- **Per-record recipient tags keep a reader's envelopes unlinkable.** The
-  tag binds the record's ephemeral key, so a chain observer cannot group
-  envelopes by reader or see when one reader stops receiving them. The
-  residual leak is the count of `0xe1` records per account, which is public.
+- **Per-record tags avoid a stable equality tag.** A passive observer without
+  the reader public key cannot group records by tag equality. Anyone who
+  knows that public key can recompute tags and identify its records; the
+  authenticated roster therefore also has privacy implications. Record
+  counts, timing and account association remain visible.
 - **Exclusion is prospective.** A new viewing generation can exclude B,
   but B keeps previously learned information. Signing revocation is a
   separate account operation.

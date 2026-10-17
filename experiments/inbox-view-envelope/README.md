@@ -1,8 +1,7 @@
 # Passkey viewing-key envelope: sizing experiment
 
-**Draft for initial internal review:**
-[internal review notes and authority boundaries](DISCUSSION.md).
-Review and iteration come before deciding on any wider discussion.
+**Bounded experiment:** see [review notes and authority boundaries](DISCUSSION.md).
+The PR is rebased onto current `main`; P-256 support from #175 is already merged.
 This experiment builds on the P-256/WebAuthn circuits in
 [Passport PR #175](https://github.com/midnightntwrk/passport/pull/175).
 
@@ -61,6 +60,20 @@ credentials must be tested for PRF support; ES256 support alone is
 insufficient. A PRF-capable credential can use the same Passport account.
 The experiment deploys one test account and keeps its address and B's
 signing key across both restores and viewing-key rotations.
+
+## Merge scope and remaining product work
+
+This PR contributes the experimental codec, probes and reproducible evidence;
+it does not enable the feature in the SDK or demo. The trusted local reader
+roster and explicit account/RP/origin bootstrap are experiment inputs. They are
+not proposed production discovery or enrolment protocols.
+
+Before product adoption, separate work must establish real-browser PRF and
+cross-client restore, authenticated reader onboarding/roster persistence,
+interrupted enrolment/rotation handling, historical viewing generations and
+recovery-wrap freshness. A dApp/grantee reader profile and guardian-group
+recipient are not implemented here. MIP-0030 remains Draft; merging this
+experiment is not cryptographic review or general WebAuthn conformance.
 
 ## Evidence and scope
 
@@ -131,8 +144,9 @@ All hex is lowercase, and the account address is 32 bytes.
 - Recipient tag: SHA-256 of recipient-ID domain string, context, reader
   public key, and the record's ephemeral X25519 public key (bytes
   `[34,66)`). The tag therefore differs per record: a chain observer
-  cannot link two envelopes for the same reader by tag, while the reader
-  recomputes it from its own public key before any X25519 work.
+  cannot link records by tag equality alone. Anyone who knows the reader
+  public key can identify its records by recomputing tags; this is not
+  anonymity against that observer. The reader checks its tag before X25519 work.
 - Wrapping key: HKDF-SHA-256 of the ephemeral-static X25519 shared secret,
   context hash as salt, view-wrap domain string as info, 32-byte output.
 - AES-GCM plaintext: 32-byte viewing secret followed by 32-byte big-endian
@@ -207,8 +221,8 @@ they are not a separately measured amount burnt or a currency quotation.
 ## Reproduce
 
 Use the Compact 0.35 / ledger-v9 toolchain and running local stack in
-[the contract guide](../../contract/README.md#running). The generated
-52-circuit P-256 account is required for offline simulation and localnet.
+[the contract guide](../../contract/README.md#running). The freshly generated
+account from the checked-out source is required for offline simulation and localnet.
 Deployment retains the **15,000 verifier-byte per-wave budget**.
 
 From `contract/`:
@@ -250,4 +264,7 @@ its empty state and the isolated-inbox serialisation before rerunning.
 The runner writes ignored `localnet.json`; the report command freezes its
 current contents in `published-localnet.json` alongside the rendered report.
 An unfinished run is explicitly labelled **PARTIAL**. Only a fully successful
-scenario is labelled **PASS**.
+scenario is labelled **PASS**. Source/artefact hashes are captured before the
+run and verified at completion and report generation. A historical run without
+that provenance, or a run against changed sources, cannot be republished as
+current-source evidence; rerun the scenario instead.

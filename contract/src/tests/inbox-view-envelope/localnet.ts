@@ -24,6 +24,7 @@ import { assertNodeIndexerConsistent, confirmTransaction, installTimedProver } f
 import { LAYOUT, ENVELOPE_SIZE, ENVELOPE_VERSION, random, hex, readerFromPrf, sealViewEnvelope, openViewEnvelope,
   findCurrentEnvelope, type OpenedEnvelope } from './codec.js';
 import { freshPrivateState } from './private-state.js';
+import { captureProvenance, verifyProvenance } from './provenance.js';
 
 const file = 'evidence/inbox-view-envelope/localnet.json';
 const evidence: any = { verdict: 'RUNNING', startedAt: new Date().toISOString(),
@@ -40,13 +41,13 @@ const git = (...args: string[]) => execFileSync('git', args, { encoding: 'utf8',
 function gitEnvironment() {
   const recorded: { gitHead: string; gitDirty: boolean; gitBase?: string } = {
     gitHead: git('rev-parse', 'HEAD'), gitDirty: git('status', '--porcelain') !== '' };
-  // Merge-base with the P-256 branch this experiment builds on, when known locally.
-  try { recorded.gitBase = git('merge-base', 'HEAD', 'origin/nicolasdp/p256-webauthn'); } catch { /* ref absent */ }
+  try { recorded.gitBase = git('merge-base', 'HEAD', 'origin/main'); } catch { /* ref absent */ }
   return recorded;
 }
 await runScenario('inbox-view-envelope localnet', async () => {
   let ctx: Awaited<ReturnType<typeof setupWallet>> | undefined;
   try {
+    evidence.provenance = captureProvenance(); save();
     const { block } = await assertNodeIndexerConsistent('height hash ledgerParameters');
     evidence.chain = { height: block.height, hash: block.hash };
     evidence.environment = { ...gitEnvironment(),
@@ -211,6 +212,7 @@ await runScenario('inbox-view-envelope localnet', async () => {
       inboxRecordBytes: entries.length * ENVELOPE_SIZE };
     evidence.artifacts = Object.fromEntries(['account.compact', 'account-p256.compact', 'managed/account/contract/index.js'].map(p => [p,
       createHash('sha256').update(readFileSync(`contracts/${p}`)).digest('hex')]));
+    verifyProvenance(evidence.provenance);
     evidence.verdict = 'PASS'; evidence.completedAt = new Date().toISOString(); save();
     console.log(JSON.stringify({ verdict: evidence.verdict, account: evidence.account, measurements: evidence.measurements }, null, 2));
   } catch (error) { evidence.verdict = 'FAIL'; evidence.error = serialiseError(error); save(); throw error; }

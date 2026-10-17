@@ -1,12 +1,13 @@
 // Render observed measurements only. Never turn a partial run into a PASS.
 import { strict as assert } from 'node:assert';
 import { readFileSync, writeFileSync, statSync } from 'node:fs';
-import { createHash } from 'node:crypto';
 import { ENVELOPE_SIZE } from './codec.js';
+import { verifyProvenance } from './provenance.js';
 
 const directory = 'evidence/inbox-view-envelope';
 const offline = JSON.parse(readFileSync(`${directory}/offline.json`, 'utf8'));
 const source = JSON.parse(readFileSync(`${directory}/localnet.json`, 'utf8'));
+verifyProvenance(source.provenance);
 const run = { ...source, verdict: source.verdict === 'RUNNING' ? 'PARTIAL' : source.verdict,
   capturedAt: new Date().toISOString() };
 if (run.error) run.error = { name: run.error.name, message: run.error.message };
@@ -47,21 +48,8 @@ const otherRows = otherLabels.map(label => {
   const { submission: s, proof: p } = observed(label);
   return `| ${label} | ${s.bytes} | ${p.proofBytes} | ${(p.milliseconds / 1000).toFixed(3)} | ${s.modelledFeeSpecks} |`;
 });
-const provenancePaths = ['src/tests/inbox-view-envelope/codec.ts', 'src/tests/inbox-view-envelope/offline.ts',
-  'src/tests/inbox-view-envelope/localnet.ts', 'src/tests/inbox-view-envelope/private-state.ts',
-  'src/tests/instrumentation.ts', 'package-lock.json',
-  'contracts/account.compact', 'contracts/account-p256.compact', 'contracts/managed/account/contract/index.js',
-  ...['append_inbox_with_p256', 'withdraw_shielded_with_p256', 'rotate_enc_key_with_p256'].flatMap(n => [
-    `contracts/managed/account/keys/${n}.verifier`, `contracts/managed/account/zkir/${n}.bzkir`])];
-const provenance = { capturedAt: new Date().toISOString(),
-  note: 'Local files hashed when this report was rendered. The run\'s recorded commit may predate these sources; compare these hashes with the committed files.',
-  files: Object.fromEntries(provenancePaths.map(path => [path, {
-    bytes: statSync(path).size, sha256: createHash('sha256').update(readFileSync(path)).digest('hex'),
-  }])) };
-writeFileSync(`${directory}/provenance.json`, JSON.stringify(provenance, null, 2) + '\n');
 // Freeze the publication snapshot; the live runner may still be writing its
 // ignored localnet.json. Readers always see the evidence behind this report.
-writeFileSync(`${directory}/published-localnet.json`, JSON.stringify(run, null, 2) + '\n');
 const proverBytes = statSync('contracts/managed/account/keys/append_inbox_with_p256.prover').size;
 const yesNo = (b: boolean) => b ? 'yes' : 'no';
 function environmentLine(env: any): string {
@@ -69,7 +57,7 @@ function environmentLine(env: any): string {
   const parts = [env.docker ?? 'Docker host not recorded'];
   if (env.gitHead) {
     parts.push(`source commit \`${env.gitHead}\`, working tree dirty: ${yesNo(!!env.gitDirty)}`);
-    parts.push(env.gitBase ? `merge-base with the P-256 branch \`${env.gitBase}\`` : 'merge-base with the P-256 branch not recorded');
+    parts.push(env.gitBase ? `merge-base with main \`${env.gitBase}\`` : 'merge-base with main not recorded');
   } else if (env.gitBase) parts.push(`commit recorded by the run \`${env.gitBase}\``);
   return `Environment: ${parts.join('; ')}.`;
 }
@@ -131,5 +119,7 @@ const lines = [
   deploymentLine(run.deployment),
   'Sources: [offline](offline.json), [localnet snapshot](published-localnet.json), [source and artefact hashes](provenance.json).', '',
 ];
+writeFileSync(`${directory}/provenance.json`, JSON.stringify(source.provenance, null, 2) + '\n');
+writeFileSync(`${directory}/published-localnet.json`, JSON.stringify(run, null, 2) + '\n');
 writeFileSync(`${directory}/RESULTS.md`, lines.join('\n'));
 console.log(`${directory}/RESULTS.md`);

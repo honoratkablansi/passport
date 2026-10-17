@@ -43,9 +43,9 @@ export function readerFromPrf(output: Uint8Array, c: Context) {
   const secretKey = hkdf(sha256, output, sha256(contextBytes(c)), text('passport:experimental:reader-key:v1'), 32);
   return { secretKey, publicKey: x25519.getPublicKey(secretKey) };
 }
-// Per-record tag: binding the ephemeral key makes two envelopes for the same
-// reader unlinkable to a chain observer, who cannot recompute the tag without
-// the reader's public key.
+// Per-record tag: no stable equality tag across envelopes. Anyone who knows
+// a reader's public key can still identify its records by recomputing this
+// tag; this is not recipient anonymity against that observer.
 export const recipientTag = (publicKey: Uint8Array, ephemeralPublicKey: Uint8Array, c: Context) =>
   tagFor(publicKey, ephemeralPublicKey, contextBytes(c));
 function tagFor(publicKey: Uint8Array, ephemeralPublicKey: Uint8Array, context: Uint8Array) {
@@ -137,8 +137,15 @@ export async function findCurrentEnvelope(c: Context, readerSecret: Uint8Array,
   for (let i = all.length - 1; i >= 0; i--) {
     const candidate = await openWith(o, all[i], currentViewPublicKey);
     if (!candidate) continue;
-    if (!validate || await validate(candidate)) return candidate;
-    candidate.viewSecret.fill(0);
+    let accepted = false;
+    try {
+      accepted = !validate || await validate(candidate);
+      if (accepted) return candidate;
+    } finally {
+      // Authentication cancellation/errors must propagate, but must not leave
+      // the rejected candidate's secret in a buffer retained by the validator.
+      if (!accepted) candidate.viewSecret.fill(0);
+    }
   }
   throw new Error('no current viewing envelope for this reader');
 }

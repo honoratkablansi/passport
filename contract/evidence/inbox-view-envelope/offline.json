@@ -1,7 +1,7 @@
 {
   "verdict": "PASS",
   "test": "inbox-view-envelope-offline",
-  "at": "2026-10-02T08:25:11.821Z",
+  "at": "2026-10-17T13:20:34.591Z",
   "profile": "experimental-e1",
   "payloadBytes": 192,
   "meaningfulBytes": 190,
@@ -88,6 +88,8 @@
     "substitutedSigningMetadata": true,
     "validatorSkipsSubstitutedMetadata": true,
     "perRecordRecipientTags": true,
+    "knownReaderPublicKeyIdentifiesRecords": true,
+    "validatorFailureClearsSecret": true,
     "staleAndStagedKeys": true,
     "independentOpenSSL": true,
     "actualP256CompiledCircuitCalls": true,
