@@ -5,7 +5,7 @@ The PR is rebased onto current `main`; P-256 support from #175 is already merged
 This experiment builds on the P-256/WebAuthn circuits in
 [Passport PR #175](https://github.com/midnightntwrk/passport/pull/175).
 
-**Automated localnet result: PASS, 2026/10/02.** B restored from an
+**Automated localnet result: PASS, 2026/10/17.** B restored from an
 empty private store and completed shielded spends before and after viewing-key
 rotation, on the same account. This run uses software ES256 credentials and
 synthetic PRF outputs; live-browser PRF remains unverified.
@@ -224,6 +224,12 @@ Use the Compact 0.35 / ledger-v9 toolchain and running local stack in
 [the contract guide](../../contract/README.md#running). The freshly generated
 account from the checked-out source is required for offline simulation and localnet.
 Deployment retains the **15,000 verifier-byte per-wave budget**.
+The 17 October run used fresh compilation with byte-identical circuit IR to
+cached full account/faucet builds. Their generated runtime logic matched
+except for the full build’s expected verifier-key map, and all reused files
+were checked against their full integrity manifests before execution. A
+`--skip-zk` build alone lacks the full manifest and verifier-key map needed
+for localnet deployment; copying key files alone is insufficient.
 
 From `contract/`:
 

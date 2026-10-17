@@ -1,6 +1,6 @@
 # Inbox viewing-key envelope: observed localnet results
 
-**PASS.** Run started 2026-10-02T08:35:19.075Z; completed 2026-10-02T08:49:26.917Z.
+**PASS.** Run started 2026-10-17T13:25:57.375Z; completed 2026-10-17T13:40:14.746Z.
 
 **192 bytes per reader per viewing-key generation** (384 bytes for two readers; 1,920 for ten).
 This fits a 32-byte account viewing secret and 64 bytes of public P-256 registration metadata.
@@ -9,11 +9,11 @@ This fits a 32-byte account viewing secret and 64 bytes of public P-256 registra
 
 | Observation | Payload B | Inbox-only serialisation delta B | Whole-state delta B | Full transaction B | Contract proof B | Proving s | Modelled fee SPECKs |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| envelope A / generation 0 | 192 | 522 | 553 | 10920 | 6364 | 27.638 | 298414577059274 |
-| envelope B / generation 0 | 192 | 608 | -738 | 10951 | 6364 | 22.246 | 112879841885797 |
-| envelope A / staged generation 1 | 192 | -709 | 736 | 10919 | 6364 | 22.060 | 385193472093425 |
-| envelope B / staged generation 1 | 192 | 253 | 247 | 10919 | 6364 | 22.659 | 174523688999128 |
-| envelope A only / generation 2 | 192 | 271 | 280 | 10951 | 6364 | 21.987 | 177869705257558 |
+| envelope A / generation 0 | 192 | 522 | 553 | 10919 | 6364 | 26.872 | 490578971428572 |
+| envelope B / generation 0 | 192 | 608 | -738 | 10950 | 6364 | 22.012 | 69745828571429 |
+| envelope A / staged generation 1 | 192 | -709 | 723 | 10920 | 6364 | 21.874 | 680336000000001 |
+| envelope B / staged generation 1 | 192 | 253 | 260 | 10920 | 6364 | 21.817 | 216800000000001 |
+| envelope A only / generation 2 | 192 | 271 | 267 | 10950 | 6364 | 22.294 | 210121142857143 |
 
 Each row is one P-256-authorised append. The inbox map is serialised in a constant blank ContractState frame.
 Both inbox-only and whole-state snapshot deltas can be negative in these observations; they are not a stable per-record storage-allocation metric.
@@ -26,12 +26,12 @@ Fees use the indexed ledger parameters, not an independently measured amount bur
 
 | Call | Full transaction B | Contract proof B | Contract proving s | Modelled fee SPECKs |
 |---|---:|---:|---:|---:|
-| enrol B | 10773 | 6364 | 26.370 | 249028413826116 |
-| activate generation 1 | 10660 | 6364 | 26.290 | 174806692353630 |
-| backfill live coin under generation 1 | 10903 | 6364 | 22.038 | 177386567963892 |
-| B fresh restore / first shielded spend | 21079 | 6364 | 26.815 | 307724406452219 |
-| B fresh restore / post-rotation shielded spend | 21077 | 6364 | 22.159 | 307775106400985 |
-| activate generation 2 | 10660 | 6364 | 22.156 | 174806692353630 |
+| enrol B | 10774 | 6364 | 26.122 | 381224685714286 |
+| activate generation 1 | 10659 | 6364 | 27.929 | 215005028571429 |
+| backfill live coin under generation 1 | 10903 | 6364 | 22.123 | 216702857142858 |
+| B fresh restore / first shielded spend | 21079 | 6364 | 26.650 | 338083885714286 |
+| B fresh restore / post-rotation shielded spend | 21079 | 6364 | 22.411 | 344644342857143 |
+| activate generation 2 | 10697 | 6364 | 22.067 | 215222171428572 |
 
 Shielded spends also generate Zswap proofs; their separate observations are retained in the JSON. This column times only the contract proof.
 Enrolling B adds one device call and one envelope append. Rotating for N retained readers takes N appends plus one rotation call.
@@ -39,10 +39,10 @@ The pre-rotation live coin also needed one 192-byte encrypted-description backfi
 
 ## Restore outcomes
 
-Account throughout: `5ff5e36e027f0cb636beab22a01ec6e5dbecedd11f32e79dd75e178bdc8b006f`.
+Account throughout: `3473332587e305c0eeadcd42c7b60a8893cfb2a1c0a5493786ea1438622078f1`.
 
-- **B fresh restore / first shielded spend: PASS.** Empty private store, A signing disabled, public history scan, recovered B registration key, accepted spend `003ac04221fc16b17f9e0353d3456d3972f189b9b211eeeb9752c3c02299e09d1c`.
-- **B fresh restore / post-rotation shielded spend: PASS.** Empty private store, A signing disabled, public history scan, recovered B registration key, accepted spend `000fa930abac7ec731ea0f9c285209c8f8985a60b9a7f7bf706d4a1fa869965d31`.
+- **B fresh restore / first shielded spend: PASS.** Empty private store, A signing disabled, public history scan, recovered B registration key, accepted spend `003df3e3157c6b13f7107cd1bac88db3fc73531ddef8865a1755c5c87157f254f3`.
+- **B fresh restore / post-rotation shielded spend: PASS.** Empty private store, A signing disabled, public history scan, recovered B registration key, accepted spend `00e218c9dc46da77e23fa1277c42fcc8492e2896a2e7c57f108ff4ed7dec0c8bc9`.
 - B could not decrypt the final fresh viewing generation after being excluded from its envelopes; A could.
 - The account address and B signing credential persisted across both restores.
 
@@ -61,7 +61,7 @@ See [experiment guide](../../../experiments/inbox-view-envelope/README.md) for t
 trusted recipient-roster assumption, historical-epoch limits, and commands.
 Recovery: Default test deployment has no usable recovery wrap. Rotation/recovery continuity is NOT tested or claimed.
 
-Environment: aarch64 8 CPUs 25159827456 memoryBytes; source commit `dca9581ad2a1f30c5e7cab526420ad701bd14e56`, working tree dirty: no; merge-base with the P-256 branch `579da739eaee1a319073128b92c43799923d94d8`.
-Ledger-parameter SHA-256: `d7d5f27e5dba936f21c14a8a8a1d5128c65f17fd09b2958c5b3c3593a94cd708`.
+Environment: aarch64 8 CPUs 25159827456 memoryBytes; source commit `2d5e7f0b7f6229806df1848dc1d91904ca26da78`, working tree dirty: no; merge-base with main `0d7bb0bc834f2d45d9fe2d84c4d022a30d648423`.
+Ledger-parameter SHA-256: `27eb882109310560df1a1bed6109a85999ae27cf7453c234163a178abad850d5`.
 The 52-circuit deployment used a 15,000-verifier-byte wave budget.
 Sources: [offline](offline.json), [localnet snapshot](published-localnet.json), [source and artefact hashes](provenance.json).

@@ -161,10 +161,16 @@ retains access to already published ciphertext from its era.
 ## Review sequence
 
 The reviewer assesses the implementation, evidence, and authority model first.
-The draft can then be revised and follow-up experiments selected.
+Review feedback can then be incorporated and follow-up experiments selected.
 
 Candidate follow-ups include real-credential device restoration, a separate
 dApp/grant reader profile and journey, and the recovery-group recipient
 above. A dApp journey must show account-approved grant issuance and separate
 viewing-key delivery, then grant-bounded operations rather than device
 enrolment. None of those follow-ups is demonstrated by the current suite.
+
+Existing work items remain open: [passkey client evidence #48](https://github.com/midnightntwrk/passport/issues/48),
+[view-key/indexer lifecycle #23](https://github.com/midnightntwrk/passport/issues/23),
+[dApp connection #29](https://github.com/midnightntwrk/passport/issues/29), and
+[recovery coordination #71](https://github.com/midnightntwrk/passport/issues/71).
+This experiment does not close those broader delivery or acceptance scopes.
