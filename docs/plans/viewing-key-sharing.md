@@ -1,21 +1,24 @@
-# Account viewing key sharing and recovery
+# Account viewing key sharing and recovery design plan
 
-**Status:** Draft for internal review, 19 October 2026. No production protocol,
-wire identifiers or contract schema are approved by this RFC.
+**Status:** Proposed design and validation plan, 19 October 2026. Protocol
+encodings and the contract schema remain open decisions.
 
 **Baseline:** Passport `6a1e5c631156a548ad06121928020d606e3fb605`, including the
 merged [envelope experiment #177](https://github.com/midnightntwrk/passport/pull/177).
 
 An account must remain readable when its original device is unavailable, when
-its viewing key changes, and when a guardian quorum recovers control. This RFC
+its viewing key changes, and when a guardian quorum recovers control. This plan
 proposes authenticated reader enrolment, resumable viewing-key rotation and a
 single recovery-group recipient. Encryption remains client-side. Contract
 changes should enforce the agreed lifecycle with the smallest necessary state.
 
 The first implementation deliverable is a recovery-group experiment. Production
-adoption depends on the decisions and acceptance criteria below. An accepted
-design should become an ADR and the relevant custody, recovery and client
-specification amendments before a production contract change.
+adoption depends on the decisions and acceptance criteria below. Record agreed
+architectural choices in [ADRs](../adrs/0000-template.md), supported by review
+and experiment evidence. Use the [existing MIP workflow](../mps-mip/README.md)
+for amendments to custody, recovery and client specifications where behaviour
+must be interoperable, before production adoption. Passport implementation
+details and validation work remain in this plan and the component canvases.
 
 ## Scope and existing evidence
 
@@ -34,7 +37,7 @@ Its generation numbers are test labels: the contract stores only the current
 experimental identifiers. Neither the format nor its 192-byte size is a
 production compatibility promise.
 
-This RFC covers delivery of the account viewing secret and continuity of live
+This plan covers delivery of the account viewing secret and continuity of live
 coin discovery. It does not introduce per-asset viewing restrictions, replace
 account authorisation or promise complete archival transaction history.
 
@@ -301,7 +304,7 @@ client validation and recovery drills. Any stronger proof requirement is a
 separate cryptographic and cost decision; it must not expose secrets to a
 delegated prover.
 
-The [documented deployment model](../plans/components/C1-account-custody-contract.md)
+The [documented deployment model](components/C1-account-custody-contract.md)
 fixes the ledger schema at deployment. Circuit maintenance is available only
 where the maintenance authority remains usable; the normal deployment flow
 [retires that authority](../../contract/README.md#the-maintenance-authority-sits-above-the-seam-so-the-last-wave-retires-it)
@@ -318,7 +321,7 @@ new account's protocol. Exact version values remain unallocated.
 
 ## Acceptance criteria
 
-These are implementation gates, not claims that the RFC or experiment meets
+These are implementation gates, not claims that the plan or experiment meets
 them. Evidence must identify source versions, inputs and actual chain outcomes.
 
 | ID | Required result |
@@ -347,22 +350,25 @@ them. Evidence must identify source versions, inputs and actual chain outcomes.
 | D6 Contract and migration | Experiment on existing schema; choose production schema only after D1 to D5. | Deployment inventory, legacy `recovery_wrap` compatibility, client capability negotiation and migration rehearsal. |
 
 Review should involve the custody-contract, SDK, recovery and cryptography
-maintainers. Acceptance of this RFC selects the invariants and follow-up work;
-it does not close these decisions without their listed evidence.
+maintainers. Review of this plan should agree the proposed invariants and
+follow-up work. Each architectural decision remains open until its supporting
+evidence has been reviewed and the agreed choice recorded in an ADR.
 
 ## Delivery sequence and existing work
 
-1. **This RFC:** review authority boundaries, security rules, state transitions
-   and acceptance criteria. Record accepted choices in an ADR as they settle.
+1. **Design review:** agree authority boundaries, security rules, state
+   transitions to evaluate and acceptance criteria for the follow-up work.
 2. **Recovery-group experiment:** authenticate the group recipient, rotate with
    guardians offline, perform quorum restore and exercise session replacement
    and finalisation. Keep experimental formats clearly versioned.
-3. **Protocol reference implementation:** settle manifest/encoding/bootstrap,
-   implement resumable enrolment and rotation, and run failure and real-PRF
-   journeys. Assess contract options against those results.
-4. **Contract and SDK adoption:** agreed spec amendments, minimal contract
-   change, all-arm proof/node validation, independent security review and a
-   rehearsed migration before deployment.
+3. **Protocol reference implementation and decisions:** settle
+   manifest/encoding/bootstrap, implement resumable enrolment and rotation,
+   and run failure and real-PRF journeys. Assess contract options against those
+   results and record agreed architectural choices in ADRs.
+4. **Contract and SDK adoption:** relevant MIP and client specification
+   amendments for interoperable behaviour, minimal contract change, all-arm
+   proof/node validation, independent security review and a rehearsed migration
+   before deployment.
 
 Track the work through the existing scopes rather than treating #177 as their
 completion: [view-key and indexer #23](https://github.com/midnightntwrk/passport/issues/23),
@@ -371,7 +377,7 @@ completion: [view-key and indexer #23](https://github.com/midnightntwrk/passport
 [recovery coordination #71](https://github.com/midnightntwrk/passport/issues/71),
 [recovery contract validation #73](https://github.com/midnightntwrk/passport/issues/73)
 and [SDK integration #167](https://github.com/midnightntwrk/passport/issues/167).
-The companion canvases are [C1](../plans/components/C1-account-custody-contract.md),
-[C14](../plans/components/C14-total-loss-recovery-flow.md),
-[C17](../plans/components/C17-view-key-indexer-sync.md) and
-[C23](../plans/components/C23-dapp-connection-protocol.md).
+The companion canvases are [C1](components/C1-account-custody-contract.md),
+[C14](components/C14-total-loss-recovery-flow.md),
+[C17](components/C17-view-key-indexer-sync.md) and
+[C23](components/C23-dapp-connection-protocol.md).

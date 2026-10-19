@@ -8,10 +8,11 @@ consumes those deliverables early.
 of merged implementation, open feature PRs, upstream proposals, demo releases,
 SDK work and formal-spec tickets.
 
-**Protocol under review:** [Account viewing key sharing and recovery](../rfcs/0001-viewing-key-sharing.md)
-defines the proposed lifecycle, contract options and acceptance criteria for
-the follow-up to the merged inbox-envelope experiment. It is a draft, not an
-adopted contract or client protocol.
+**Proposed design and validation plan:** [Account viewing key sharing and recovery](viewing-key-sharing.md)
+defines the lifecycle to evaluate, contract options and acceptance criteria
+for the follow-up to the merged inbox-envelope experiment. Agreed architectural
+choices will be recorded in ADRs, with relevant MIP and client specification
+amendments for interoperable behaviour before adoption.
 
 ## What v1.0 is
 

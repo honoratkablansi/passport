@@ -4,9 +4,9 @@ This PR is a bounded experiment for review. The device-restoration result,
 trusted-roster assumption and evidence limits below define its scope; merging
 it does not select a production reader/recovery protocol.
 
-**Follow-up design:** [Account viewing key sharing and recovery RFC](../../docs/rfcs/0001-viewing-key-sharing.md)
-proposes the production lifecycle, contract options and acceptance criteria.
-The RFC remains a draft; the evidence boundaries below still apply.
+**Follow-up design:** [Account viewing key sharing and recovery plan](../../docs/plans/viewing-key-sharing.md)
+proposes the lifecycle to evaluate, contract options and acceptance criteria.
+The plan remains proposed; the evidence boundaries below still apply.
 
 ## Authority boundaries
 
