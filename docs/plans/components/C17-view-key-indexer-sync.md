@@ -1,6 +1,6 @@
 # C17 · View-key + indexer sync
 
-**Status 2026/10/01:** draft [#177](https://github.com/midnightntwrk/passport/pull/177)
+**Status 2026/10/19:** merged experiment [#177](https://github.com/midnightntwrk/passport/pull/177)
 demonstrates 192-byte inbox envelopes per reader/viewing-key generation.
 Two fresh-private-state clients restored and spent before/after rotation
 with B offline, using software ES256 and synthetic PRF. Account and other

@@ -6,7 +6,7 @@
 window.PASSPORT_DATA = {
   meta: {
     drafted: '2026/05/01',
-    updated: '2026/10/17',
+    updated: '2026/10/19',
     version: 'draft-4',
   },
 
@@ -402,7 +402,7 @@ window.PASSPORT_DATA = {
     {
       id: 'C9', name: 'Device-bound authentication', category: 'auth',
       status: 'decided',
-      status_note: 'Merged #175 demonstrates direct P-256 passkey signing under a bounded profile. Draft #177 separately uses synthetic PRF outputs for reader encryption keys and viewing restoration. Real Safari signing passed; real PRF, synchronization and the browser/authenticator support matrix remain unverified by these experiments.',
+      status_note: 'Merged #175 demonstrates direct P-256 passkey signing under a bounded profile. Merged experiment #177 separately uses synthetic PRF outputs for reader encryption keys and viewing restoration. Real Safari signing passed; real PRF, synchronization and the browser/authenticator support matrix remain unverified by these experiments.',
       serves: ['P1', 'P3', 'P6'],
       outcome: 'A device can hold independent account signing authority. Main has JubJub and k256 arms; merged #175 adds an authenticator-held P-256 key. A PRF-capable credential may additionally derive a reader encryption key, but ES256 support does not establish PRF support. Signing, viewing and recoverability are separate capabilities. The older PRF-to-JubJub and managed-signer models are design options, not a statement of the deployed demo configuration.',
       hard_deps: ['C1', 'C16'],
@@ -539,7 +539,7 @@ window.PASSPORT_DATA = {
       open_questions: [
         'Parameters and policy — guardian-set size and threshold defaults, onboarding and replacement ceremonies, optional time-locked self-recovery.',
         'Guardian-request authentication — out-of-band confirmation UX for buss-req strings.',
-        'Viewing-wrap freshness and successor lifecycle: existing recovery_wrap requires a session update. Draft #177 proposes an inbox recovery-group recipient but tests only passkey readers.',
+        'Viewing-wrap freshness and successor lifecycle: existing recovery_wrap requires a session update. Merged experiment #177 proposes an inbox recovery-group recipient but tests only passkey readers.',
         'Cryptographer review of the integration (φ handling, session nonces, wire formats) — acceptance criterion for the recovery MIP.',
       ],
       failure_modes: [
@@ -575,7 +575,7 @@ window.PASSPORT_DATA = {
     },
     {
       id: 'C16', name: 'Wallet local storage', category: 'wallet',
-      status_note: 'Private-state ownership remains under #166/#58 and SDK proposal #24. Draft #177 demonstrates fresh-private-state restoration with explicit public bootstrap metadata, not a general dApp backup service or account discovery from a passkey alone.',
+      status_note: 'Private-state ownership remains under #166/#58 and SDK proposal #24. Merged experiment #177 demonstrates fresh-private-state restoration with explicit public bootstrap metadata, not a general dApp backup service or account discovery from a passkey alone.',
       serves: ['P1', 'P3', 'P6'],
       outcome: 'Where the wallet persists private state on the user\'s device — per-device key material, the wallet-local coin store, sync state, name ownership cache, attestations, metadata. Includes the encryption envelope. No seed exists to store: device keys derive from the passkey (C9), and assets live in the account contract (C4).',
       hard_deps: ['C9'],
@@ -598,7 +598,7 @@ window.PASSPORT_DATA = {
     },
     {
       id: 'C17', name: 'View-key + indexer (sync)', category: 'wallet',
-      status_note: 'Draft #177 is for Nicolas to review and iterate first. Its device-based localnet restore/spend tests pass with software ES256 and synthetic PRF. Lace connects as a dApp/grantee, not an ACC device-key provider; that grant journey is not tested here. Reader-roster trust, bootstrap, real PRF and recovery remain.',
+      status_note: 'Experiment #177 merged on 19 October; its fresh 17 October localnet run passed. Its device-based localnet restore/spend tests pass with software ES256 and synthetic PRF. Lace connects as a dApp/grantee, not an ACC device-key provider; that grant journey is not tested here. Reader-roster trust, bootstrap, real PRF and recovery remain.',
       serves: ['P3', 'P8'],
       outcome: 'The read half of the wallet — how visible chain state is reconstructed for the UI, and what a substitutable indexer must be trusted with. The view/spend separation is settled for account-custodied assets: the custody MIP (MIP-0012) makes the account encryption secret a pure viewing capability (reads everything, spends nothing; delegable without ceding custody; rotation specified), validated end-to-end by the stateless custody experiment. Consequence: for account-held assets no viewing key is ever handed to an indexer — the inbox walk needs only public chain data plus local decryption, and the indexer\'s one required surface, contract-address → transaction enumeration, exists: the contractActions subscription replays the complete per-address history, verified end-to-end by the reference implementation\'s discovery suite (closing the gap W5 had recorded). The classic view-key-to-indexer trade-off survives only for user-held Zswap coins — and C4\'s exclusivity decision bounds even that: one-hop coins are transient in-flight value the client sweeps into the account, so the remaining surface is incoming-payment detection, not a standing balance.',
       hard_deps: ['C2', 'C10', 'C11', 'C16', 'C18'],
@@ -1126,7 +1126,7 @@ window.PASSPORT_DATA = {
     {
       when: '2026/10/01', kind: 'validated',
       title: 'Viewing-key envelopes: fresh-client restoration and spending',
-      detail: 'Draft #177 passes the automated localnet lifecycle: two fresh-private-state restores/spends, rotation with B offline, live-coin backfill and exclusion from a later generation. Each reader envelope is 192 bytes. Software ES256 and synthetic PRF; live PRF and proposed guardian-recovery envelopes remain untested.',
+      detail: 'Merged experiment #177 passes the automated localnet lifecycle: two fresh-private-state restores/spends, rotation with B offline, live-coin backfill and exclusion from a later generation. Each reader envelope is 192 bytes. Software ES256 and synthetic PRF; live PRF and proposed guardian-recovery envelopes remain untested.',
       components: ['C9', 'C16', 'C17'],
       evidence: ['inbox-view-envelope'],
     },
@@ -1207,8 +1207,8 @@ window.PASSPORT_DATA = {
     },
     {
       lane: 'Client',
-      title: 'Initial review of the viewing-key experiment',
-      detail: 'Nicolas reviews #177 before wider involvement. Keep ACC device keys, dApp grant keys and viewing-reader access distinct: Lace has the dApp role. The tested A/B devices do not validate that grant journey. Bootstrap, roster trust, real PRF and recovery remain review points.',
+      title: 'Integrate the viewing-key experiment',
+      detail: 'Experiment #177 is merged. Next: real-browser PRF restoration and authenticated reader lifecycle design. Keep ACC device keys, dApp grant keys and viewing-reader access distinct: Lace has the dApp role. The tested A/B devices do not validate that grant journey. Bootstrap, roster trust, real PRF and recovery remain review points.',
       components: ['C9', 'C16', 'C17'],
     },
     {
@@ -1583,7 +1583,7 @@ window.PASSPORT_DATA = {
       url: 'https://github.com/midnightntwrk/passport/pull/177',
       name: 'Inbox viewing-key envelopes',
       summary: '192 bytes per reader/generation; fresh-private-state restoration/spending and offline-reader rotation passed on localnet. Software ES256 and synthetic PRF. Guardian recipient proposal is unimplemented.',
-      validates: ['C9', 'C16', 'C17'], status: 'Automated PASS; draft #177 stacked on #175',
+      validates: ['C9', 'C16', 'C17'], status: 'Merged #177; automated localnet PASS (17 October)',
     },
     {
       id: 'redjubjub-wallet',

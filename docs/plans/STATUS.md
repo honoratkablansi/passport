@@ -1,8 +1,9 @@
-# Passport development status — 17 October 2026
+# Passport development status — 19 October 2026
 
 This refresh reconciles the MIP publications and their account, signing,
 recovery and integration dependencies. The release/demo/SDK observations in
-the historical audit below retain their 1 October observation date.
+the historical audit below retain their 1 October observation date. Standards
+were checked on 17 October; this follow-up records the 19 October merge of #177.
 
 ## Standards and evidence
 
@@ -19,7 +20,11 @@ the historical audit below retain their 1 October observation date.
 Native P-256 exists in Compact 0.35. `wa-json134` and one live Safari account-key
 rotation are bounded evidence, not general WebAuthn/browser or PRF coverage.
 The variable-length experiment #179 remains open and records no proof/VK-size
-saving. Draft #177's recovery-group envelope remains unimplemented/unvalidated.
+saving. #177 merged on 19 October as `fc7c240`. Its 17 October localnet run
+passed both fresh-client restores/spends, offline-reader rotation, live-coin
+backfill and exclusion. The recovery-group envelope remains unimplemented/unvalidated.
+Real-browser PRF, reader onboarding, interrupted rotation and SDK integration
+remain follow-ups; this merge contributes an experiment, not a product release.
 
 ## Issue follow-through
 
@@ -42,7 +47,7 @@ scope. Publication alone does not close acceptance, integration or audit work.
 
 The following is the original dated audit, retained for provenance. Its open-PR,
 submission and ticket counts describe 1 October, and are superseded by the
-17 October register above for the streams refreshed here. Release/site/SDK
+current register above for the streams refreshed here. Release/site/SDK
 observations below have not been re-tested in this standards refresh.
 
 Passport has a working reference account contract, published custody and

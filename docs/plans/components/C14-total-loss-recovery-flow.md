@@ -85,7 +85,7 @@ the UX bounds how often one forms.
 **Recovery of the encryption secret.** The existing 64-byte `recovery_wrap`
 seals the viewing secret under a key derived from the recovery secret;
 refresh requires a session update. Freshness and successor lifecycle
-remain. Draft #177 proposes an inbox recovery-group recipient, but that
+remain. Merged experiment #177 proposes an inbox recovery-group recipient, but that
 extension is unimplemented and untested; its experiment covers passkey readers.
 
 **Cryptographer review of the integration.** The ANARKey construction

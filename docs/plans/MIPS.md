@@ -288,7 +288,7 @@ credentials.
 - **Passkey-derived device keys** — the PRF → JubJub scalar
   derivation, domain-separated under the registry; graduates from C9
   if it needs to become a standard for cross-wallet portability.
-- **Viewing-key sharing** — draft [#177](https://github.com/midnightntwrk/passport/pull/177)
+- **Viewing-key sharing** — merged experiment [#177](https://github.com/midnightntwrk/passport/pull/177)
   demonstrates 192-byte inbox reader envelopes and fresh-client restoration
   with software credentials and synthetic PRF. Protocol, bootstrap, roster
   trust and recovery decisions remain before proposing a standard.

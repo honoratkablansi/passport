@@ -2,7 +2,7 @@
 
 **Status 2026/10/01:** private-state ownership remains open in #166/#58 and
 [SDK proposal #24](https://github.com/midnightntwrk/midnight-passport-sdk/pull/24).
-Draft #177 demonstrates restoration with explicit public bootstrap metadata,
+Merged experiment #177 demonstrates restoration with explicit public bootstrap metadata,
 not general dApp backup or account discovery from a passkey alone. WPP
 evaluation is deferred in the current queue. See [status](../STATUS.md).
 
