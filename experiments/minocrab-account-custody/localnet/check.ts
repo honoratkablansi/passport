@@ -6,6 +6,8 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const keys = new NativeKeys();
 for (const name of allCircuits()) {
     const preimage = readFileSync(`${root}/artifacts/preimages/minocrab/${name}.preimage`);
+    // Test-only proof server bound to loopback; this carries laboratory preimages locally.
+    // nosemgrep: typescript.react.security.react-insecure-request.react-insecure-request
     const response = await fetch('http://127.0.0.1:6300/check', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: ledgerApi.createCheckPayload(preimage, await keys.getZKIR(name)) });
     if (!response.ok)
         throw new Error(`${response.status}: ${await response.text()}`);
