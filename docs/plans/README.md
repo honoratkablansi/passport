@@ -8,6 +8,11 @@ consumes those deliverables early.
 of merged implementation, open feature PRs, upstream proposals, demo releases,
 SDK work and formal-spec tickets.
 
+**Protocol under review:** [Account viewing key sharing and recovery](../rfcs/0001-viewing-key-sharing.md)
+defines the proposed lifecycle, contract options and acceptance criteria for
+the follow-up to the merged inbox-envelope experiment. It is a draft, not an
+adopted contract or client protocol.
+
 ## What v1.0 is
 
 Feature-complete Midnight Passport — the user-facing identity and wallet
