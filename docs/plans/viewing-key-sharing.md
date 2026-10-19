@@ -41,6 +41,22 @@ This plan covers delivery of the account viewing secret and continuity of live
 coin discovery. It does not introduce per-asset viewing restrictions, replace
 account authorisation or promise complete archival transaction history.
 
+## Conservative defaults for the next experiment
+
+These defaults bound the recovery-group experiment on the existing contract.
+They do not select a production schema or establish new on-chain guarantees.
+
+| Area | Experiment default |
+|---|---|
+| Recovery status | Report envelope publication, chain activation, checkpoint reconciliation and successful recovery testing separately. Record the generation last tested for each recovery path. |
+| Old viewing generations | Keep an encrypted recovery archive of every experiment generation and its transition journal. No automatic deletion after a timeout or completed backfill. |
+| Guardian availability | Validate group-key derivation through an actual-quorum setup drill, then publish fresh envelopes while guardians remain offline. Do not require an acknowledgement on every rotation. |
+| Successor access | Before submitting recovery, publish an authenticated, encrypted successor bundle outside the owner-only inbox. Test retrieval by a fresh successor after an independent caller finalises at the earliest allowed time. |
+| Manifest availability | Use content-addressed encrypted records and two independently retrievable copies. Lose the original client and withhold the primary indexer; require retrieval through the remaining path or an explicit unavailable result. |
+
+The retention, successor-bundle and retrieval rules below define what those
+defaults require. D1 to D6 remain decisions for review and supporting evidence.
+
 ## Roles and authority
 
 | Role | Authority and relationship to viewing access |
@@ -74,7 +90,7 @@ obtainable.
 | V3 Bind envelopes | Authenticate the protocol version, account, network, recipient key/profile, viewing generation and public key, and recovery session where applicable. Reject unsupported profiles and ambiguous encodings. |
 | V4 Select from current state | Validate a restored secret against the current public viewing key and generation from authenticated chain state. Historical reads require an explicitly authenticated historical generation. |
 | V5 Use fresh secrets | Every rotation uses fresh random viewing material. Increasing a generation counter does not make reuse of an old key safe. Generation counters must not wrap. |
-| V6 Preserve required readers | Retain at least one independently restorable owner or quorum path; a policy containing only dApp readers is insufficient. Honest clients may report rotation complete only after required reader and recovery envelopes are durably published and live-coin continuity is satisfied. Availability and ciphertext correctness are distinct obligations. |
+| V6 Validate recovery paths | The policy must retain an owner or quorum path; dApp readers alone are insufficient. Proposed contract checks authenticate declared policy and publication commitments. Decryptability, independent retrieval and recovery testing are client obligations, with the tested generation recorded. Activation alone must not be presented as a usable backup or completed coin synchronisation. |
 | V7 Revoke prospectively | Excluded readers retain old keys and data. Publication of a staged envelope already reveals the candidate secret to its recipient, even before activation. |
 | V8 Preserve the quorum | Recovery-group delivery must require the existing reconstruction threshold. No ordinary per-guardian envelope may replace that threshold. |
 | V9 Keep secrets local | Viewing secrets, reader secrets, PRF outputs and reconstructed recovery secrets must not enter contract witnesses, remote prover requests, logs or telemetry. Clear transient secret buffers where the runtime permits; do not claim guaranteed erasure from a browser heap. |
@@ -107,6 +123,23 @@ Its transport, confidentiality and reconstruction by another authorised owner
 or recovering quorum must be settled before adopting this option. A roster
 stored only on the original device is insufficient. A roster encrypted under a
 key unavailable until that same roster is found creates a bootstrap cycle.
+
+**Experiment retrieval target:** address the encrypted manifest by its content
+hash and retain two copies with independent retrieval paths. The bootstrap
+descriptor must let a fresh owner or quorum find, authenticate and decrypt it
+without the original device or its cache. In the compact-commitment design,
+the current chain revision authenticates the expected hash; the existing-schema
+experiment must document its authenticated publication provenance instead.
+Content addressing supplies integrity, not freshness or availability.
+
+Disable the original client, withhold the primary indexer and one copy, and
+retrieve the manifest, envelope references and transition journal through the
+remaining path and a separate trusted chain-state source. Record which services
+remain trusted, their failure domains, and a declared retrieval deadline for
+the run. Missing data yields `recovery_data_unavailable`; stale or incorrectly
+bound data yields `recovery_data_invalid`. Neither result permits fallback to
+an unverified older policy or a successful-recovery indication. This is a
+bounded availability test, not a guarantee against every custodian withholding.
 
 A public roster can reveal device, provider and recovery relationships. Even
 the prototype's changing recipient tags are identifiable by someone who knows
@@ -161,7 +194,7 @@ stateDiagram-v2
     Active --> Preparing: Fresh key and expected state
     Preparing --> Published: Required envelopes durably available
     Published --> Reconciling: Authorised atomic activation
-    Reconciling --> Active: Live coin continuity verified
+    Reconciling --> Active: Checkpoint reconciled and archive retained
     Preparing --> Abandoned: Cancel or policy changes
     Published --> Abandoned: Cancel or policy changes
     Abandoned --> Preparing: New operation and fresh secret
@@ -170,15 +203,17 @@ stateDiagram-v2
 `Preparing` and `Published` may initially be client/manifest states. The
 contract options below determine which transitions become enforceable on
 chain. Activation changes the authoritative viewing state; completion also
-requires reconciliation. After activation, repair moves forward rather than
-restoring an earlier viewing key.
+requires checkpoint reconciliation. The retained archive supports later
+old-generation receipts; returning to `Active` does not authorise key deletion.
+After activation, repair moves forward rather than restoring an earlier
+viewing key.
 
 | Transition | Preconditions and failure behaviour |
 |---|---|
 | Prepare | Read authenticated current state and complete reader policy. Choose a fresh secret, next generation and operation identifier. Snapshot recovery-session binding and a chain checkpoint for coin discovery. |
 | Publish | Seal to each retained reader, including the active recovery group when recovery is configured. Persist exact ciphertext references and hashes. Retries reuse the exact saved ciphertext; new sealing uses fresh ephemeral material and nonces under the chosen profile. |
-| Activate | Recheck the expected generation, policy revision and recovery session, including a retained owner/quorum path that can restore from a fresh client. Commit the new viewing key and required control commitments atomically. Competing or stale proposals fail and must reconcile. |
-| Reconcile | Process the pre-activation coin set and receipts arriving across the activation boundary. Resume from durable checkpoints. Mark completion only when the agreed live-coin continuity condition is met. |
+| Activate | Check the proposed contract predicate and the separate client preflight below. Commit the new viewing key and required control commitments atomically. Competing or stale proposals fail and must reconcile. Chain success does not certify recovery. |
+| Reconcile | Process the checkpointed coin set and receipts across activation. Resume from durable checkpoints and report the checkpoint reached. Keep the encrypted archive and continue scanning for later receipts; a completed scan does not permit pruning old keys. |
 | Exclude | Remove the reader from the next policy and rotate to a fresh secret. Separately revoke device or grant authority where intended. If that reader received the staged secret, abandon that candidate and generate another. |
 
 Publication is disclosure. Cancelling an operation cannot retract its staged
@@ -187,25 +222,43 @@ recipient decrypting it. Restaging after a recipient/policy change must use
 fresh material. Accepted duplicate records may cost space but must not change
 the meaning of the operation.
 
-**Proposed first live-coin policy:** backfill descriptions of unspent coins to
-the new generation rather than distributing all historical viewing secrets to
-every new reader. Keep the previous secret and an authenticated transition
-journal available through an authorised recovery path until reconciliation
-finishes. A crash after activation must not leave the only old-key copy on the
-lost device. Giving a recipient an old key reveals that generation's data and
-requires separate consent.
+**Experiment retention policy:** backfill descriptions of unspent coins to the
+new generation, and keep every experiment viewing secret and its authenticated
+transition journal in an encrypted recovery archive. Before activation, test
+archive retrieval independently of the rotating client's local store. Limit
+archive decryption to explicitly authorised owner/quorum recovery paths; new
+dApp readers receive no historical keys through ordinary viewing-key delivery.
+Historical access requires separate consent. Before retiring the old group,
+obtain that consent and provision authenticated archive access for its
+replacement, or retain another explicitly authorised historical recovery path.
 
-The implementation must define a chain checkpoint/finality rule, deduplication
-by coin identity, spent-coin filtering and a tail scan for concurrent receipts.
-For conforming depositors, it must either reject deposits declaring a stale
-generation/key at admission or provide a bounded late-receipt policy and an
-archive/recovery path for their decryption. A declared key check does not prove
-which key encrypted opaque bytes or that they describe the deposited coin;
-malicious or malformed ciphertext is outside this recoverability guarantee. An
-unbounded possibility of deposits to an old key prevents a finite claim that
-the old key can safely be discarded. The existing one-coin backfill is not
-evidence for this concurrent lifecycle. The current permissionless deposit
-circuit does not reject a description encrypted to a stale viewing key.
+There is **no automatic deletion cutoff** in this experiment. Completing a
+checkpointed scan, observing no new receipts for a period, or finalising recovery
+does not permit discarding an old secret or its discovery journal. A fresh
+recovering client retrieves the archive and authenticated generation history,
+resumes discovery, and can backfill late receipts under the current generation.
+Use only test accounts and retain their encrypted archive for the experiment's
+recovery lifetime; deliberate teardown ends that account's recovery guarantee.
+
+The run must record its chain checkpoint/finality rule, coin-identity
+deduplication and spent-coin filtering. Submit a valid old-key deposit after a
+scan is reported complete, then restore it using a fresh client and the archive.
+The current `deposit_shielded` does not check the viewing generation, so no
+well-formed receipt to a retained experiment key is excluded merely because
+it arrived late. Malformed descriptions, coin/description mismatches and
+encryption to keys never provisioned for that account remain outside the
+recoverability guarantee. An archive does not eliminate chain-history or
+storage availability requirements.
+
+**Production decision D2:** choose an enforced admission cutoff for conforming
+stale-generation deposits, a durable historical-key retention policy, or an
+explicitly narrower late-receipt guarantee. Define fresh-client behaviour after
+any permitted deletion. Checking a declared generation cannot itself prove
+which key encrypted opaque bytes or that they describe the deposited coin.
+Until that decision is validated, neither a finite tail scan nor the existing
+one-coin backfill justifies old-key deletion. Old readers can still read later
+receipts encrypted to keys they already know; exclusion applies to fresh
+generations, not automatically to every deposit after a wall-clock time.
 
 ## Guardian recovery lifecycle
 
@@ -228,6 +281,12 @@ the recovery secret, derives its reader key and restores the current viewing
 generation and any required transition material. One group envelope preserves
 the reconstruction threshold; individual guardian reader envelopes would not.
 
+The setup drill must use reconstructed guardian shares, not a setup client's
+retained copy of the secret. After setup, record the latest published generation
+separately from the generation/session last restored by an actual quorum.
+Offline re-sealing does not advance the latter. Requiring every guardian to
+acknowledge every rotation would defeat the intended offline refresh.
+
 A quorum can decrypt these envelopes as soon as it reconstructs its secret.
 The recovery veto and timelock govern account-control transfer, not this
 off-chain disclosure. Consent must explain that distinction.
@@ -237,7 +296,7 @@ off-chain disclosure. Consent must explain that distinction.
 | Recovery setup | Authenticate the group key and demonstrate quorum decryption before advertising the backup as usable. |
 | Recovery-session replacement | Provision and validate the new group. Rotate the viewing secret to exclude the old group from future generations; merely replacing the recovery authorisation key does not revoke its current viewing access. |
 | Recovery pending | Proposed conservative rule: pause new reader-policy changes and viewing-key activation, invalidate unfinished proposals, and preserve access to the current recovery material. Owner cancellation remains available under the recovery protocol. This restriction is new contract behaviour requiring review. |
-| Before finalisation | The recovering client obtains the current viewing secret and required transition material, validates it against chain state, and durably prepares successor access. Viewing-key decryption does not authorise finalisation or shorten the veto window. |
+| Before submission | For the existing-schema experiment, prepare and independently retrieve the encrypted successor bundle before `recover_submit` starts the veto window. This is an honest-client precondition, not an existing contract readiness check. |
 | Finalisation | Preserve the existing authorisation/veto rules and retirement of old device entries. Invalidate old reader-policy proposals and recognise that the old recovery session no longer establishes current recovery authority. |
 | Successor activation | The successor rotates the viewing key, chooses its reader policy and provisions a fresh guardian session or explicitly reports recovery as unconfigured. Do not automatically retain old device, dApp or recovery readers. |
 
@@ -250,13 +309,47 @@ the old quorum. The current successor entry is Jubjub; restoring a passkey
 owner additionally requires authorised enrolment or a separately specified
 successor extension. See the [current contract](../../contract/contracts/account.compact).
 
-Finalisation is permissionless after the veto window. A local SDK checkpoint
-cannot force every finalising caller to wait for successor provisioning. The
-design review must choose between a contract-bound successor package and a
-resumable post-finalisation delivery path that remains available to the
-legitimate successor. If viewing rotation follows finalisation, the interval
-of continued old-reader visibility must be explicit. A prototype may measure
-that interval; it must not claim atomic privacy revocation.
+**Experiment successor path:** publish an encrypted bundle for a separate,
+authenticated successor reader key to the redundant retrieval paths before
+`recover_submit`. Include the current viewing secret, authorised archive access
+and transition journal references. Its authenticated descriptor binds the
+account, network, recovery session and authority, expected device epoch,
+successor device and reader keys, viewing generation/public key, and content
+hash. Validate that binding against the accepted recovery submission and the
+archived authenticated pre-finalisation chain state. A stored old session
+identifier alone is not evidence of current recovery authority.
+
+The quorum cannot use the owner-authorised inbox append before finalisation
+when the old owner is unavailable. The experiment therefore uses external
+encrypted publication with explicit recovery/successor authentication, not an
+assumed owner signature. Document that experimental authentication transcript
+and discovery path without changing the existing `recover_submit` challenge.
+The descriptor and decryption path must survive independently of the original
+client and the recovery vector invalidated by finalisation. Publication failure
+stops the honest client before submission; the existing contract does not
+enforce this precondition against another submitter.
+
+After submission, stop the recovering client and let an independent caller
+finalise at the earliest allowed time. A separately launched successor client,
+given only its signing/reader credentials and public bootstrap inputs, must
+retrieve the bundle, restore current and retained historical viewing access,
+and resume authorised operations. It must not reuse recovered secrets or a
+saved bundle from the stopped process. Check the bundle against current chain
+state and reject a stale binding. The existing-schema positive run uses owners
+that respect the proposed pause during recovery; a separate concurrent-rotation
+case must detect a stale bundle. Enforcing that pause on chain remains D3.
+
+**Production decision D4:** choose an on-chain binding/readiness rule for a
+successor package or a validated post-finalisation access path. Permissionless
+finalisation cannot depend on a recovering SDK's local checkpoint. Preserve
+the recovery veto and authority rules while testing the chosen delivery path.
+
+The interval from finalisation until a fresh viewing generation activates is
+explicitly **continued old-reader visibility**. Record its start and end in the
+experiment; if successor rotation never happens, the interval does not expire
+automatically. Report account control restored separately from fresh-generation
+reader exclusion. Even after rotation, previously learned keys still reveal
+old-generation data and late receipts encrypted to those keys.
 
 The existing symmetric `recovery_wrap` cannot be refreshed using only a public
 reader key. Keep its versioned legacy meaning until an explicit compatibility
@@ -296,13 +389,57 @@ write path, including deposits, grant change entries, recovery cancellation
 and finalisation. Keeping an old unrestricted `rotate_enc_key` alongside a
 guarded activation call would bypass the proposed invariant.
 
-The contract may validate authorisation, commitments, expected state and
-presence of referenced records. It cannot infer that opaque ciphertext is
-decryptable, the intended secret was encrypted, a reader retained its key, or
-a private roster is available. The baseline proposal assigns those checks to
-client validation and recovery drills. Any stronger proof requirement is a
-separate cryptographic and cost decision; it must not expose secrets to a
-delegated prover.
+### Activation checks and client validation
+
+For the compact-commitment option, the **proposed on-chain activation
+predicate** is the conjunction of these checks. It is a candidate for a new
+contract, not functionality supplied by the existing rotation circuit:
+
+1. A valid owner authorisation binds the entire transition, including the next
+   viewing key, policy commitment, required recipient commitments and envelope
+   references. Existing nonce and signing-arm checks still apply.
+2. The expected viewing generation/key, policy revision, device epoch and
+   recovery-session/authority binding equal current state. No recovery is
+   pending under the proposed D3 rule.
+3. The next generation is exactly the current generation plus one, without
+   overflow. The approved policy declares at least one owner/quorum path and
+   includes the active recovery recipient when recovery is configured.
+4. Each required recipient commitment has an envelope reference in the
+   authenticated manifest. Each referenced inbox record exists in this account
+   and matches its committed ciphertext hash. Policy/manifest membership and
+   context bindings must be verified, not accepted as unrelated hashes.
+5. Install the approved next viewing state atomically; no legacy rotation path
+   may bypass these checks.
+
+Exact commitment encodings and membership proofs remain D1/D5 work. None of
+these checks proves correct encryption, secret retention or off-chain manifest
+availability. The generation counter also cannot establish cryptographic
+freshness of a newly supplied secret. Those remain separate obligations.
+
+**Client preflight and evidence:** authenticate the reader/group keys, validate
+possession at enrolment, construct and validate the new envelopes, and retrieve
+the manifest and encrypted archive independently of the local cache. Preserve
+at least one owner/quorum recovery path and its discovery inputs. Test actual
+decryption with a fresh client or reconstructed quorum at the appropriate
+drill; do not represent offline recipients as having acknowledged a new key.
+The experiment must label which checks are only performed by its clients.
+
+| Reported state | Evidence and limit |
+|---|---|
+| Published for generation g | Required records can be retrieved and their authenticated hashes/bindings match. Recipient decryption is not certified. |
+| Generation g active | Chain state confirms activation. This does not certify usable recovery or complete coin discovery. |
+| Recovery tested at generation r and session s | An identified owner/quorum path restored and validated the secret from an independent client. A newer publication does not update this test result. |
+| Reconciled through checkpoint h | The defined scan completed through h. Later old-generation receipts still require the retained archive. |
+| Recovery unavailable or invalid | Retrieval or validation failed. Preserve the distinct chain/control status and require repair; never turn a retrieval timeout or decryption failure into a successful-backup indication. |
+
+Require a negative case in which a correctly committed, present ciphertext
+cannot be decrypted by the intended recipient. Structural activation checks
+may pass; client recovery must fail explicitly and must not advance the tested
+generation. This demonstrates the boundary instead of implying a recoverability
+proof. Any stronger proof requirement is a separate cryptographic and cost
+decision and must not expose secrets to a delegated prover.
+
+### Deployment and migration
 
 The [documented deployment model](components/C1-account-custody-contract.md)
 fixes the ledger schema at deployment. Circuit maintenance is available only
@@ -329,23 +466,43 @@ them. Evidence must identify source versions, inputs and actual chain outcomes.
 | A1 Recipient authentication | Reject substituted reader keys, unrelated grant hashes, expired/replayed enrolments and possession responses for another account, network or operation. |
 | A2 Independent restore | Restore with the original device unavailable and no saved envelope/coin cache. Demonstrate real browser PRF and a separate-client journey for each supported passkey profile; fail clearly for unsupported credentials. |
 | A3 Envelope validation | Reject malformed versions, context mismatches, tampering, wrong recipients, stale/poisoned candidates and substituted signing metadata. Use independent known-answer vectors for the selected encoding and cryptographic profile. |
-| A4 Rotation interruption | Interrupt after every publication and activation step; resume from another authorised client. Concurrent proposals, duplicate submissions, policy changes and excluded staged recipients cannot silently reuse or activate unsafe material. |
-| A5 Coin continuity | Restore and spend pre-rotation live coins and receipts around activation, with spent-coin deduplication, stale-key deposit cases and checkpoint/finality behaviour covered. Demonstrate recovery during reconciliation. |
-| A6 Guardian continuity | Perform multiple rotations with guardians offline, then reconstruct with an actual quorum and restore current viewing access. Fewer than the threshold cannot restore it through their guardian material. |
-| A7 Recovery transition | Exercise session replacement, pending/cancelled recovery, permissionless finalisation and successor reprovisioning. Old devices/grants lose control as specified; old readers are excluded only once a fresh generation takes effect. |
-| A8 Bootstrap and availability | Lose the original roster cache. Reconstruct the authenticated policy and transition journal, distinguish unavailable from invalid data, reject rollback and handle a stale/withholding indexer. |
-| A9 Contract enforcement | For each changed signing arm and bypass path, regenerate keys and show accepted valid proofs and rejected invalid transitions at node admission. Include the outstanding recovery-retirement cases in #73. |
+| A4 Rotation interruption | Interrupt after every publication and activation step; resume from another authorised client. Concurrent proposals, duplicate submissions, policy changes and excluded staged recipients cannot silently reuse or activate unsafe material. A committed but undecryptable envelope must never produce a successful-recovery indication. |
+| A5 Coin continuity | Restore during reconciliation and spend pre-rotation live coins, receipts across activation and an old-key deposit submitted after checkpoint reconciliation completes. Use a fresh client and the retained encrypted archive, with deduplication, spent-coin filtering and recorded finality assumptions. No automatic key/journal deletion. |
+| A6 Guardian continuity | Validate setup from reconstructed shares, rotate with guardians offline, then restore with an actual quorum. Reject substituted group keys and threshold-minus-one attempts; run the replacement matrix below and independently verify derivation/context vectors. Publication alone must not advance the last-tested generation/session. |
+| A7 Recovery transition | Stop the recovering client after submission, let a third party finalise at the earliest allowed time, and restore using a fresh successor with credentials/public bootstrap only. Test cancellation, session replacement, stale/missing successor bundles and concurrent rotation. Record the interval until fresh-generation exclusion; old devices/grants must lose control as specified. |
+| A8 Bootstrap and availability | Lose the original client/cache, withhold the primary indexer and one manifest copy, and retrieve the authenticated policy/archive through independent paths within the declared run deadline. All-copy withholding yields an explicit unavailable result; wrong hashes, revisions or bindings are invalid. No stale-policy fallback. |
+| A9 Contract enforcement | For each changed signing arm and bypass path, regenerate keys and show accepted valid proofs and rejected invalid transitions at node admission. Distinguish structural acceptance of an undecryptable committed envelope from client recovery failure. Include the outstanding recovery-retirement cases in #73. |
 | A10 Cost and migration | Measure per-reader and per-live-coin publication, proof time, full transactions, state growth and deployment waves against the existing 15,000-verifier-byte budget. Rehearse the selected legacy-wrap and account migration on test accounts. |
 | A11 Secret handling | Inspect delegated-prover inputs, logs and persisted state. No plaintext viewing, reader, PRF or reconstructed recovery secrets cross the authorised client boundary. |
+
+### Guardian replacement matrix
+
+For A6, publish generation g to the old group, establish a replacement with
+fresh recovery-secret material, then publish fresh generation g+1 only to the
+new group. Test both quorums against both generations:
+
+| Quorum | Generation g already disclosed to the old group | Fresh generation g+1 |
+|---|---|---|
+| Old quorum | Can still decrypt its retained ciphertext; no retroactive revocation claim. | Cannot decrypt from its old shares, envelopes or archive access. |
+| New quorum | Can decrypt only if historical access was separately authorised and delivered; otherwise reject. | Can decrypt and match the authenticated current viewing public key. |
+
+Use threshold-minus-one shares without a retained setup secret, and substitute
+a different group public key at registration. Repeat binding negatives for
+another account, network and recovery session. Record canonical derivation and
+binding vectors and verify them independently of the main implementation.
+These cases are regression evidence, not a replacement for cryptographic
+analysis. Retiring old archive access requires fresh wrapping for later archive
+updates: a previously disclosed archive key must not unlock g+1 through a
+shared mutable archive, even if the direct group envelope excludes the old group.
 
 ## Decisions required before contract implementation
 
 | Decision | Proposed starting point | Evidence needed to settle it |
 |---|---|---|
-| D1 Reader-policy storage | Compact chain commitment with a durable authenticated manifest. | Fresh-owner and quorum reconstruction, privacy review, no bootstrap cycle, availability failure behaviour. |
-| D2 Live-coin continuity | Backfill live descriptions, retain recovery-capable transition material until completion. | Concurrent/stale deposits, crash recovery, finite completion and an explicit historical-access policy. |
+| D1 Reader-policy storage | Evaluate a compact chain commitment with a content-addressed encrypted manifest and redundant retrieval. | Fresh owner/quorum retrieval after loss of the original client and withholding of the primary indexer/one copy, with a declared deadline and explicit unavailable/invalid results; current-revision authentication, privacy review and no bootstrap cycle. |
+| D2 Live-coin continuity | Experiment: backfill live descriptions and retain every generation in an encrypted recovery archive, without automatic deletion. | Late receipts after completed scans and fresh-client archive recovery. Production must choose an admission cutoff or durable retention/narrower guarantee and specify what remains recoverable after any deletion. |
 | D3 Recovery and rotation ordering | Pause policy/activation changes while recovery is pending; invalidate prior proposals. | Veto/cancellation liveness, ongoing deposit handling and all-arm enforcement. |
-| D4 Successor provisioning | Bind successor access to recovery preparation or provide a resumable post-finalisation path. | Permissionless finalisation, no orphaned viewing secret, explicit interval before old-reader exclusion. |
+| D4 Successor provisioning | Experiment: publish an authenticated encrypted successor bundle outside the owner-only inbox before submission, with independent discovery/retrieval. | Earliest third-party finalisation while the recoverer is offline, then fresh successor restore; stale/missing bundle failures and a measured privacy interval. Production must choose an on-chain package binding or validated post-finalisation access path. |
 | D5 Cryptographic profiles | Separate device, dApp and recovery profiles with shared context rules. | Reviewed derivations, canonical encodings, replay rules, vectors, identifier allocation and measured payload sizes. |
 | D6 Contract and migration | Experiment on existing schema; choose production schema only after D1 to D5. | Deployment inventory, legacy `recovery_wrap` compatibility, client capability negotiation and migration rehearsal. |
 
