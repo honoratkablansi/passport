@@ -56,6 +56,13 @@ Last reconciled: **17 October 2026**. See [development status](../plans/STATUS.m
 The authorisation, ECDSA, recovery and regeneration paths above are retired
 to canonical pointers. The older custody mirror is non-canonical.
 
+- **[MIP-0025 — Managed Private State and Capsule Runtime](https://github.com/midnightntwrk/midnight-improvement-proposals/blob/main/mips/mip-0025-capsule-runtime.md)**
+  (Draft), merged through upstream #334. This is a proposed runtime design,
+  not a shipped private-state service. Discussion:
+  https://github.com/midnightntwrk/midnight-improvement-proposals/discussions/355.
+- **MIP-0028 — Custom spend logic** remains a reserved number in open
+  https://github.com/midnightntwrk/midnight-improvement-proposals/pull/335.
+
 ## Working draft and evidence notes
 
 - `mips/mip-xxxx-scoped-grants.md` — **Scoped Grants and dApp Connection
