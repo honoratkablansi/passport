@@ -1,5 +1,7 @@
 # Account custody in Minocrab
 
+See [19 October rebase compatibility](REBASE-2026-10-19.md) for the current shared-client hash allowance and the boundary of the historical evidence.
+
 An independent Rust/Minocrab implementation of all **52 state-changing
 entrypoints** of the current **`spec_version = 3` account custody reference** at
 passport commit [`0d7bb0bc`](https://github.com/midnightntwrk/passport/tree/0d7bb0bc834f2d45d9fe2d84c4d022a30d648423/contract).

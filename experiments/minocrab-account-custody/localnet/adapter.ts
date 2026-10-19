@@ -21,6 +21,10 @@ const { httpClientProofProvider } = await import(resolve('@midnight-ntwrk/midnig
 export const ledgerApi = await import(resolve('@midnightntwrk/ledger-v9'));
 const root = fileURLToPath(new URL('../', import.meta.url));
 // Fail before transacting if the shared SDK oracle has drifted from the benchmark.
+// The sole post-benchmark exception is #177's optional browser-credential creation
+// settings. Signing/verification and the frozen reference remain unchanged.
+// See REBASE-2026-10-19.md for the compatibility check and evidence boundary.
+const compatibleWebAuthnSha256 = "b49c26fcb9a405885e18c44e40e94b20ca7c2c18c638344557b7a5b18602c108";
 const provenance = JSON.parse(readFileSync(`${root}/reference/provenance.json`, 'utf8'));
 for (const [group, directory] of [
     ['source_sha256', `${root}/../../contract`],
@@ -28,7 +32,9 @@ for (const [group, directory] of [
 ] as const) {
     for (const [name, expected] of Object.entries(provenance[group])) {
         const actual = createHash('sha256').update(readFileSync(`${directory}/${name}`)).digest('hex');
-        assert.equal(actual, expected, `reference drift: ${name}`);
+        const compatible = group === 'source_sha256' && name === 'src/wallet/webauthn.ts'
+            && actual === compatibleWebAuthnSha256;
+        assert.ok(actual === expected || compatible, `reference drift: ${name}`);
     }
 }
 export function clean(x: any): any {
