@@ -8,6 +8,12 @@ consumes those deliverables early.
 of merged implementation, open feature PRs, upstream proposals, demo releases,
 SDK work and formal-spec tickets.
 
+**Proposed design and validation plan:** [Account viewing key sharing and recovery](viewing-key-sharing.md)
+defines the lifecycle to evaluate, contract options and acceptance criteria
+for the follow-up to the merged inbox-envelope experiment. Agreed architectural
+choices will be recorded in ADRs, with relevant MIP and client specification
+amendments for interoperable behaviour before adoption.
+
 ## What v1.0 is
 
 Feature-complete Midnight Passport — the user-facing identity and wallet
